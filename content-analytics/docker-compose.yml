@@ -1,0 +1,76 @@
+# Local / dev: ClickHouse + dashboard only.
+#
+# For a full VPS stack (Airbyte + analytics + custom connectors), use:
+#   ../deploy/bootstrap.sh
+# See ../deploy/README.md
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    restart: unless-stopped
+    ports:
+      # Localhost only — for abctl/Airbyte on the same VPS. Do not expose to the public internet.
+      - "127.0.0.1:8123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in .env}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - analytics
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Bind to localhost — put nginx/caddy in front for HTTPS.
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in .env}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - analytics
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  analytics:
+    name: content-analytics
+
+volumes:
+  clickhouse_data:
