@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "business_id": { "type": "string" },
+    "display_name": { "type": "string" },
+    "username": { "type": "string" },
+    "profile_image": { "type": "string" },
+    "followers_count": { "type": "integer" },
+    "following_count": { "type": "integer" },
+    "likes_count": { "type": "integer" },
+    "video_count": { "type": "integer" },
+    "is_verified": { "type": "boolean" }
+  }
+}

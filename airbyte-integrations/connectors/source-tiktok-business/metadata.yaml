@@ -1,0 +1,25 @@
+data:
+  allowedHosts:
+    hosts:
+      - business-api.tiktok.com
+  connectorBuildOptions:
+    baseImage: docker.io/airbyte/python-connector-base:4.0.0@sha256:d9894b6895923b379f3006fa251147806919c62b7d9021b5cd125bb67d7bbe22
+  connectorSubtype: api
+  connectorType: source
+  definitionId: a3f8c2e1-9b4d-4a7f-8c1e-2d5f6a8b9c0d
+  dockerImageTag: 0.1.0
+  dockerRepository: airbyte/source-tiktok-business
+  githubIssueLabel: source-tiktok-business
+  license: ELv2
+  name: TikTok Business (Organic)
+  registryOverrides:
+    cloud:
+      enabled: false
+    oss:
+      enabled: true
+  releaseStage: alpha
+  supportLevel: community
+  tags:
+    - language:python
+    - cdk:python
+metadataSpecVersion: "1.0"

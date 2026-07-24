@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "item_id": { "type": "string" },
+    "create_time": { "type": "integer" },
+    "caption": { "type": "string" },
+    "share_url": { "type": "string" },
+    "embed_url": { "type": "string" },
+    "thumbnail_url": { "type": "string" },
+    "video_duration": { "type": "number" },
+    "video_views": { "type": "integer" },
+    "likes": { "type": "integer" },
+    "comments": { "type": "integer" },
+    "shares": { "type": "integer" },
+    "reach": { "type": "integer" },
+    "average_time_watched": { "type": "number" },
+    "total_time_watched": { "type": "number" },
+    "full_video_watched_rate": { "type": "number" }
+  }
+}

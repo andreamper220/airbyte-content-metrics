@@ -1,0 +1,96 @@
+# Unified VPS stack: ClickHouse + dashboard + (optional) connector image builds.
+#
+# Airbyte OSS itself runs via abctl (kind + Helm) — see bootstrap.sh.
+# Plain docker-compose for the Airbyte platform is no longer supported upstream.
+#
+# Quick start:
+#   cp .env.example .env && nano .env
+#   ./bootstrap.sh
+
+name: content-metrics
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    restart: unless-stopped
+    ports:
+      # Bind address is configurable — abctl/kind on Linux must reach the host port.
+      # Keep 8123 closed in the public firewall (ufw/security group).
+      - "${CLICKHOUSE_HOST_BIND:-127.0.0.1}:8123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ../content-analytics/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in .env}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - analytics
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  app:
+    build:
+      context: ../content-analytics
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_HOST_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in .env}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - analytics
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # Build custom connector images from this repo (not started on normal `up`).
+  #   docker compose --profile build-connectors build
+  source-tiktok-business:
+    profiles: ["build-connectors"]
+    build:
+      context: ../airbyte-integrations/connectors/source-tiktok-business
+      dockerfile: ../../../docker-images/Dockerfile.python-connector
+      args:
+        BASE_IMAGE: docker.io/airbyte/python-connector-base:4.0.0@sha256:d9894b6895923b379f3006fa251147806919c62b7d9021b5cd125bb67d7bbe22
+        CONNECTOR_NAME: source-tiktok-business
+    image: airbyte/source-tiktok-business:${TIKTOK_CONNECTOR_TAG:-dev}
+    entrypoint: ["true"]
+
+networks:
+  analytics:
+    name: content-analytics
+
+volumes:
+  clickhouse_data:

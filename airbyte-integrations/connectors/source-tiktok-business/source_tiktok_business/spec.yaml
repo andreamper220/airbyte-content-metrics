@@ -1,0 +1,38 @@
+documentationUrl: https://business-api.tiktok.com/portal/docs
+connectionSpecification:
+  $schema: https://json-schema.org/draft-07/schema#
+  title: TikTok Business Organic Spec
+  type: object
+  required:
+    - access_token
+    - business_id
+  additionalProperties: true
+  properties:
+    access_token:
+      type: string
+      title: Access Token
+      description: OAuth access token with TikTok Business organic scopes.
+      airbyte_secret: true
+      order: 0
+    business_id:
+      type: string
+      title: Business ID
+      description: TikTok Business account ID (open_id from OAuth).
+      order: 1
+    start_date:
+      type: string
+      title: Start Date
+      description: Only sync videos published on or after this date (YYYY-MM-DD). Optional.
+      pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+      format: date
+      examples:
+        - "2024-01-01"
+      order: 2
+    max_count:
+      type: integer
+      title: Page Size
+      description: Number of videos per API request (max 20).
+      default: 20
+      minimum: 1
+      maximum: 20
+      order: 3

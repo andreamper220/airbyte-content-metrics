@@ -1,0 +1,23 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+version = "0.1.0"
+name = "source-tiktok-business"
+description = "Source implementation for TikTok Business organic analytics."
+authors = ["Airbyte <contact@airbyte.io>"]
+license = "ELv2"
+readme = "README.md"
+packages = [{ include = "source_tiktok_business" }]
+
+[tool.poetry.dependencies]
+python = "^3.9,<3.12"
+airbyte-cdk = "0.80.0"
+
+[tool.poetry.scripts]
+source-tiktok-business = "source_tiktok_business.run:run"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+requests-mock = "^1.9.3"
