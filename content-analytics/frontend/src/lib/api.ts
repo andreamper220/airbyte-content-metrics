@@ -72,6 +72,7 @@ export type RefreshStatus = {
   airbyte_sync_interval_minutes: number
 }
 
+export type UtmMappingRow = {
   platform: string
   utm_source: string
 }
