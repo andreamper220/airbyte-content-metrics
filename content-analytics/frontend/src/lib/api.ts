@@ -58,7 +58,20 @@ export type VideoDetailResponse = {
   comments: VideoComment[]
 }
 
-export type UtmMappingRow = {
+export type RefreshStatus = {
+  in_progress: boolean
+  last_refresh_at: string | null
+  last_refresh_ok: boolean | null
+  last_error: string | null
+  last_airbyte_sync_at: string | null
+  last_airbyte_sync_ok: boolean | null
+  last_airbyte_error: string | null
+  auto_refresh_enabled: boolean
+  mart_refresh_interval_minutes: number
+  airbyte_sync_enabled: boolean
+  airbyte_sync_interval_minutes: number
+}
+
   platform: string
   utm_source: string
 }
@@ -85,7 +98,8 @@ export const api = {
     fetchJson<VideoDetailResponse>(
       `/api/video/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}`,
     ),
-  refresh: () => fetchJson<{ status: string }>("/api/refresh", { method: "POST" }),
+  refresh: () => fetchJson<RefreshStatus>("/api/refresh", { method: "POST" }),
+  refreshStatus: () => fetchJson<RefreshStatus>("/api/refresh/status"),
   getUtmMap: () => fetchJson<UtmMappingResponse>("/api/settings/utm-map"),
   saveUtmMap: (mappings: UtmMappingRow[]) =>
     fetchJson<{ mappings: UtmMappingRow[] }>("/api/settings/utm-map", {

@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -5,14 +7,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.db import get_client, query
+from app.refresh_service import get_refresh_status, run_refresh_cycle
+from app.scheduler import auto_refresh_loop
 from app.queries import (
     DAILY_TREND,
     PLATFORM_CORRELATION,
     PLATFORM_SUMMARY,
-    REFRESH_MART_VIDEOS,
-    REFRESH_PLATFORM_DAILY,
-    REFRESH_WEB_TRAFFIC,
     TOP_VIRAL,
     VIDEO_COMMENTS,
     VIDEO_DETAIL,
@@ -20,7 +22,19 @@ from app.queries import (
 from app.settings_store import PLATFORMS, get_utm_mapping, save_utm_mapping
 from app.video_embed import build_embed
 
-app = FastAPI(title="Content Analytics", version="0.2.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    refresh_task = asyncio.create_task(auto_refresh_loop())
+    yield
+    refresh_task.cancel()
+    try:
+        await refresh_task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="Content Analytics", version="0.2.0", lifespan=lifespan)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 FRONTEND_INDEX = FRONTEND_DIST / "index.html"
@@ -46,12 +60,20 @@ async def api_save_utm_map(payload: UtmMappingPayload):
     return {"mappings": saved}
 
 
+@app.get("/api/refresh/status")
+async def refresh_status():
+    return {
+        **get_refresh_status(),
+        "auto_refresh_enabled": settings.auto_refresh_enabled,
+        "mart_refresh_interval_minutes": settings.mart_refresh_interval_minutes,
+        "airbyte_sync_enabled": settings.airbyte_sync_enabled,
+        "airbyte_sync_interval_minutes": settings.airbyte_sync_interval_minutes,
+    }
+
+
 @app.post("/api/refresh")
 async def refresh_marts():
-    client = get_client()
-    for sql in (REFRESH_MART_VIDEOS, REFRESH_WEB_TRAFFIC, REFRESH_PLATFORM_DAILY):
-        client.command(sql)
-    return {"status": "ok"}
+    return await asyncio.to_thread(run_refresh_cycle, trigger="manual")
 
 
 @app.get("/api/viral")

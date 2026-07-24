@@ -111,7 +111,9 @@ Catalog sources (pull from Docker Hub, no build needed):
   - airbyte/source-google-analytics-data-api
   - airbyte/destination-clickhouse
 
-After each Airbyte sync:
+After each Airbyte sync (or enable AUTO_REFRESH in .env — dashboard rebuilds marts every 15 min):
   curl -X POST http://127.0.0.1:${APP_PORT:-8080}/api/refresh
+
+Full VPS guide (Russian): deploy/VPS.md
 
 EOF

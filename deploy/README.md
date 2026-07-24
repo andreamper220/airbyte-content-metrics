@@ -67,6 +67,8 @@ docker compose up -d --build
 
 ## Быстрый старт
 
+> **Подробная пошаговая инструкция для VPS:** [VPS.md](./VPS.md)
+
 ```bash
 git clone <repo-url> airbyte-content-metrics
 cd airbyte-content-metrics/deploy
@@ -131,11 +133,11 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/   # 200
 
 ### 3. После синка
 
-```bash
-curl -X POST http://127.0.0.1:8080/api/refresh
-```
+Дашборд **сам** пересобирает витрины из `raw_*` каждые 15 минут (настраивается в `.env`).
 
-Или кнопка **«Обновить данные»** на дашборде.
+Ручной запуск: кнопка **«Обновить данные»** или `curl -X POST http://127.0.0.1:8080/api/refresh`.
+
+Чтобы дашборд **сам запускал синки Airbyte**, добавьте в `.env` UUID connections (через запятую) и учётные данные API — см. `AUTO_REFRESH` / `AIRBYTE_*` в `.env.example`.
 
 Маппинг UTM: http://127.0.0.1:8080/settings
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 
-import { api, type CorrelationRow, type SummaryRow, type VideoDetailResponse, type ViralRow } from "@/lib/api"
+import { api, type CorrelationRow, type RefreshStatus, type SummaryRow, type VideoDetailResponse, type ViralRow } from "@/lib/api"
 import { fmt, platformColor } from "@/lib/format"
 import { AppHeader } from "@/components/layout/app-header"
 import { TrendChart } from "@/components/dashboard/trend-chart"
@@ -24,36 +24,55 @@ export function DashboardPage() {
   const [trend, setTrend] = useState<Awaited<ReturnType<typeof api.trend>>>([])
   const [correlation, setCorrelation] = useState<CorrelationRow[]>([])
   const [viral, setViral] = useState<ViralRow[]>([])
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null)
   const [videoOpen, setVideoOpen] = useState(false)
   const [videoData, setVideoData] = useState<VideoDetailResponse | null>(null)
 
   const loadAll = useCallback(async () => {
     const daysNum = Number(days)
-    const [summaryData, trendData, correlationData, viralData] = await Promise.all([
+    const [summaryData, trendData, correlationData, viralData, statusData] = await Promise.all([
       api.summary(daysNum),
       api.trend(daysNum),
       api.correlation(daysNum),
       api.viral(daysNum),
+      api.refreshStatus(),
     ])
     setSummary(summaryData)
     setTrend(trendData)
     setCorrelation(correlationData)
     setViral(viralData)
+    setRefreshStatus(statusData)
   }, [days])
 
   useEffect(() => {
     void loadAll()
   }, [loadAll])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadAll()
+    }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [loadAll])
+
   async function handleRefresh() {
     setRefreshing(true)
     try {
-      await api.refresh()
+      const status = await api.refresh()
+      setRefreshStatus(status)
       await loadAll()
     } finally {
       setRefreshing(false)
     }
   }
+
+  const statusLine = refreshStatus?.last_refresh_at
+    ? `Обновлено: ${new Date(refreshStatus.last_refresh_at).toLocaleString("ru-RU")}${
+        refreshStatus.auto_refresh_enabled
+          ? ` · авто каждые ${refreshStatus.mart_refresh_interval_minutes} мин`
+          : ""
+      }`
+    : "Загрузка…"
 
   async function openVideo(platform: string, videoId: string) {
     const data = await api.video(platform, videoId)
@@ -65,7 +84,7 @@ export function DashboardPage() {
     <div className="mx-auto max-w-7xl p-6">
       <AppHeader
         title="Content Analytics"
-        subtitle="YouTube · TikTok · Instagram · Яндекс.Метрика"
+        subtitle={`YouTube · TikTok · Instagram · Яндекс.Метрика · ${statusLine}`}
         days={days}
         onDaysChange={setDays}
         onRefresh={handleRefresh}

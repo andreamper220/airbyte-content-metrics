@@ -333,15 +333,27 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 
 ---
 
-## Шаг 9. Автоматизация (позже)
+## Шаг 9. Автоматическое обновление
 
-- Airbyte: расписание sync (cron)
-- После sync — webhook/cron на `POST http://localhost:8080/api/refresh`
+Дашборд **сам** пересобирает витрины (`mart_*`) из таблиц `raw_*` в ClickHouse — по умолчанию **каждые 15 минут**.
 
-Пример cron (раз в час):
-```bash
-curl -X POST http://localhost:8080/api/refresh
-```
+В `.env` (см. `.env.example`):
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `AUTO_REFRESH_ENABLED` | `true` | Фоновое обновление витрин |
+| `MART_REFRESH_INTERVAL_MINUTES` | `15` | Интервал пересборки витрин |
+| `AIRBYTE_SYNC_ENABLED` | `false` | Запускать синки Airbyte через API |
+| `AIRBYTE_SYNC_INTERVAL_MINUTES` | `360` | Как часто дергать Airbyte (6 ч) |
+| `AIRBYTE_API_URL` | — | Напр. `http://127.0.0.1:8000` |
+| `AIRBYTE_USERNAME` / `AIRBYTE_PASSWORD` | — | Из `abctl local credentials` |
+| `AIRBYTE_CONNECTION_IDS` | — | UUID connections через запятую |
+
+Статус: `GET http://localhost:8080/api/refresh/status`
+
+На странице дашборда отображается время последнего обновления; графики подтягиваются сами каждую минуту.
+
+**Важно:** сырые данные в `raw_*` по-прежнему пишет **Airbyte**. Авто-refresh только пересчитывает витрины. Чтобы дашборд сам запускал синки источников — включите `AIRBYTE_SYNC_ENABLED` и укажите ID connections из Airbyte UI.
 
 ---
 
