@@ -99,6 +99,40 @@ CREATE TABLE IF NOT EXISTS analytics.raw_metrika_sessions
 ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
 ORDER BY (visitID);
 
+CREATE TABLE IF NOT EXISTS analytics.raw_vk_videos
+(
+    video_id String,
+    owner_id Int64,
+    title String,
+    description String,
+    published_at Int64,
+    duration UInt32,
+    views UInt64,
+    likes UInt64,
+    comments UInt64,
+    reposts UInt64,
+    player_url String,
+    share_url String,
+    _airbyte_extracted_at DateTime64(3) DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
+ORDER BY (video_id);
+
+CREATE TABLE IF NOT EXISTS analytics.raw_dzen_shorts
+(
+    publication_id String,
+    title String,
+    published_at Int64,
+    url String,
+    views UInt64,
+    likes UInt64,
+    comments UInt64,
+    content_type LowCardinality(String),
+    _airbyte_extracted_at DateTime64(3) DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
+ORDER BY (publication_id);
+
 CREATE TABLE IF NOT EXISTS analytics.raw_video_comments
 (
     platform LowCardinality(String),
@@ -226,6 +260,38 @@ SELECT * FROM (
         now() AS snapshot_at
     FROM analytics.raw_instagram_media m FINAL
     LEFT JOIN analytics.raw_instagram_media_insights i FINAL ON m.id = i.id
+
+    UNION ALL
+
+    SELECT
+        'vk' AS platform,
+        video_id,
+        title,
+        toDateTime(published_at) AS published_at,
+        share_url AS url,
+        views,
+        likes,
+        comments,
+        reposts AS shares,
+        0 AS reach,
+        now() AS snapshot_at
+    FROM analytics.raw_vk_videos FINAL
+
+    UNION ALL
+
+    SELECT
+        'dzen' AS platform,
+        publication_id AS video_id,
+        title,
+        toDateTime(published_at) AS published_at,
+        url,
+        views,
+        likes,
+        comments,
+        0 AS shares,
+        0 AS reach,
+        now() AS snapshot_at
+    FROM analytics.raw_dzen_shorts FINAL
 );
 
 -- Platform → utm_source mapping (editable via /settings UI)

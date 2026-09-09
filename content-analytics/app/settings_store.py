@@ -8,9 +8,14 @@ DEFAULT_UTM_MAP = [
     {"platform": "tiktok", "utm_source": "tt"},
     {"platform": "instagram", "utm_source": "instagram"},
     {"platform": "instagram", "utm_source": "ig"},
+    {"platform": "vk", "utm_source": "vk"},
+    {"platform": "vk", "utm_source": "vkontakte"},
+    {"platform": "dzen", "utm_source": "dzen"},
+    {"platform": "dzen", "utm_source": "zen"},
+    {"platform": "dzen", "utm_source": "yandex_zen"},
 ]
 
-PLATFORMS = ["youtube", "tiktok", "instagram"]
+PLATFORMS = ["youtube", "tiktok", "instagram", "vk", "dzen"]
 
 
 def get_utm_mapping() -> list[dict[str, str]]:

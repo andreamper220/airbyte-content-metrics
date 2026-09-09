@@ -39,9 +39,9 @@ npm run dev
 ## Общая схема
 
 ```
-┌─────────────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐
-│   YouTube   │   │   TikTok    │   │  Instagram   │   │  Я.Метрика  │
-└──────┬──────┘   └──────┬──────┘   └──────┬───────┘   └──────┬──────┘
+┌─────────────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐   ┌─────────────┐
+│   YouTube   │   │   TikTok    │   │  Instagram   │   │  VK · Dzen  │   │  Я.Метрика  │
+└──────┬──────┘   └──────┬──────┘   └──────┬───────┘   └──────┬──────┘   └──────┬──────┘
        │                 │                  │                  │
        └─────────────────┴──────────────────┴──────────────────┘
                                     │
@@ -257,6 +257,102 @@ Source: `source-instagram` (Meta Graph API)
 
 ---
 
+## Шаг 5a. VK (короткие видео / клипы)
+
+Коннектор: `airbyte-integrations/connectors/source-vk`
+
+### Что нужно
+
+1. [VK для разработчиков](https://dev.vk.com/) → приложение
+2. Access token с правом `video` (сервисный ключ сообщества или пользовательский токен)
+3. `owner_id` — ID пользователя или сообщества (для групп со знаком `-`, напр. `-123456789`)
+
+### Сборка образа для Airbyte
+
+```bash
+cd deploy
+docker compose --profile build-connectors build source-vk
+kind load docker-image airbyte/source-vk:dev -n airbyte-abctl
+```
+
+В Airbyte: **Settings → Sources → Add Docker connector** → `airbyte/source-vk:dev`
+
+### Config
+
+```json
+{
+  "access_token": "YOUR_TOKEN",
+  "owner_id": -123456789,
+  "start_date": "2024-01-01",
+  "max_short_duration_seconds": 180,
+  "page_size": 100
+}
+```
+
+### Streams → таблица
+
+| Stream | ClickHouse | Метрики |
+|--------|------------|---------|
+| `short_videos` | `raw_vk_videos` | views, likes, comments, reposts, duration |
+
+Синхронизируются только короткие ролики (по длительности и типу `short`/`clip`).
+
+### UTM
+
+```
+?utm_source=vk&utm_medium=social
+```
+
+---
+
+## Шаг 5b. Яндекс Дзен (шортсы)
+
+Коннектор: `airbyte-integrations/connectors/source-dzen`
+
+### Что нужно
+
+1. Публичный канал на [dzen.ru](https://dzen.ru) — slug из URL (`https://dzen.ru/mychannel` → `mychannel`)
+2. *(Опционально)* для статистики из кабинета автора: `Session_id` cookie, `x-csrf-token`, `publisherId` из URL редактора
+
+> Официального публичного API у Дзена нет; коннектор использует те же внутренние endpoint'ы, что и веб-интерфейс.
+
+### Сборка образа для Airbyte
+
+```bash
+cd deploy
+docker compose --profile build-connectors build source-dzen
+kind load docker-image airbyte/source-dzen:dev -n airbyte-abctl
+```
+
+В Airbyte: **Settings → Sources → Add Docker connector** → `airbyte/source-dzen:dev`
+
+### Config
+
+```json
+{
+  "channel_name": "mychannel",
+  "session_id": "OPTIONAL_SESSION_ID",
+  "csrf_token": "OPTIONAL_CSRF",
+  "publisher_id": "OPTIONAL_PUBLISHER_ID",
+  "start_date": "2024-01-01",
+  "max_pages": 20
+}
+```
+
+### Streams → таблица
+
+| Stream | ClickHouse | Метрики |
+|--------|------------|---------|
+| `shorts` | `raw_dzen_shorts` | views, likes, comments (только `/shorts/`) |
+
+### UTM
+
+```
+?utm_source=dzen&utm_medium=social
+```
+
+---
+
 ## Шаг 6. Яндекс.Метрика
 
 Source: `source-yandex-metrica`
@@ -287,7 +383,7 @@ Config:
 
 ### UTM
 
-Убедитесь, что в ссылках из соцсетей есть `utm_source=youtube|tiktok|instagram`.
+Убедитесь, что в ссылках из соцсетей есть `utm_source=youtube|tiktok|instagram|vk|dzen`.
 
 Проверка в Метрике: Отчёты → Источники → UTM.
 
@@ -304,7 +400,12 @@ SELECT 'youtube' AS platform, 'youtube' AS utm_source
 UNION ALL SELECT 'tiktok', 'tiktok'
 UNION ALL SELECT 'tiktok', 'tt'           -- если так пишете в UTM
 UNION ALL SELECT 'instagram', 'instagram'
-UNION ALL SELECT 'instagram', 'ig';
+UNION ALL SELECT 'instagram', 'ig'
+UNION ALL SELECT 'vk', 'vk'
+UNION ALL SELECT 'vk', 'vkontakte'
+UNION ALL SELECT 'dzen', 'dzen'
+UNION ALL SELECT 'dzen', 'zen'
+UNION ALL SELECT 'dzen', 'yandex_zen';
 ```
 
 Применить SQL:
@@ -316,12 +417,14 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 
 ## Шаг 8. Первый полный цикл
 
-1. Запустить все 4 connection в Airbyte (Manual sync)
+1. Запустить все connections в Airbyte (Manual sync)
 2. Проверить данные:
    ```sql
    SELECT count() FROM analytics.raw_tiktok_videos;
    SELECT count() FROM analytics.raw_youtube_videos;
    SELECT count() FROM analytics.raw_instagram_media;
+   SELECT count() FROM analytics.raw_vk_videos;
+   SELECT count() FROM analytics.raw_dzen_shorts;
    SELECT count() FROM analytics.raw_metrika_sessions;
    ```
 3. Открыть http://localhost:8080 → **«Обновить данные»**
@@ -367,9 +470,11 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 | 4 | Airbyte sync YouTube | `raw_youtube_videos` > 0 строк |
 | 5 | Airbyte sync TikTok | `raw_tiktok_videos` > 0 строк |
 | 6 | Airbyte sync Instagram | `media` + `media_insights` > 0 |
-| 7 | Airbyte sync Метрика | `raw_metrika_sessions` > 0 |
-| 8 | UTM в Метрике | `UTMSource` = youtube/tiktok/instagram |
-| 9 | Refresh на дашборде | таблицы и графики заполнены |
+| 7 | Airbyte sync VK | `raw_vk_videos` > 0 |
+| 8 | Airbyte sync Dzen | `raw_dzen_shorts` > 0 |
+| 9 | Airbyte sync Метрика | `raw_metrika_sessions` > 0 |
+| 10 | UTM в Метрике | `UTMSource` = youtube/tiktok/instagram/vk/dzen |
+| 11 | Refresh на дашборде | таблицы и графики заполнены |
 
 ---
 
@@ -387,6 +492,12 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 
 **TikTok API пустой ответ**  
 → Business account, правильные scopes, `business_id` = open_id.
+
+**VK API error 15 / access denied**  
+→ Проверьте scope `video` и что `owner_id` соответствует сообществу/аккаунту токена.
+
+**Dzen sync пустой или HTTP 403**  
+→ Обновите `session_id` и `csrf_token` из браузера; проверьте slug канала в `channel_name`.
 
 **Метрика долго синкается**  
 → Logs API асинхронный; первый запрос может ждать до 2 часов.

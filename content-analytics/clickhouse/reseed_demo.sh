@@ -10,6 +10,8 @@ TRUNCATE TABLE analytics.raw_tiktok_videos;
 TRUNCATE TABLE analytics.raw_youtube_videos;
 TRUNCATE TABLE analytics.raw_instagram_media;
 TRUNCATE TABLE analytics.raw_instagram_media_insights;
+TRUNCATE TABLE analytics.raw_vk_videos;
+TRUNCATE TABLE analytics.raw_dzen_shorts;
 TRUNCATE TABLE analytics.raw_metrika_sessions;
 TRUNCATE TABLE analytics.raw_video_comments;
 TRUNCATE TABLE analytics.mart_videos;

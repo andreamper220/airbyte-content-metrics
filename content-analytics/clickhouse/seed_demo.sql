@@ -65,7 +65,12 @@ VALUES
 ('v19', '2026-07-16', '2026-07-16 11:00:00', 'https://example.com/veggies', '1', 'c19', 'instagram', 'social', '', '', '0', now()),
 ('v20', '2026-07-18', '2026-07-18 11:00:00', 'https://example.com/review', '2', 'c20', 'youtube', 'social', '', '', '0', now()),
 ('v21', '2026-07-19', '2026-07-19 10:00:00', 'https://example.com/stories', '1', 'c21', 'instagram', 'social', '', '', '0', now()),
-('v22', '2026-07-23', '2026-07-23 21:00:00', 'https://example.com/dessert', '3', 'c22', 'tiktok', 'social', '', '', '0', now());
+('v22', '2026-07-23', '2026-07-23 21:00:00', 'https://example.com/dessert', '3', 'c22', 'tiktok', 'social', '', '', '0', now()),
+('v23', '2026-07-21', '2026-07-21 11:00:00', 'https://example.com/vk-recipe', '2', 'c23', 'vk', 'social', '', '', '0', now()),
+('v24', '2026-07-21', '2026-07-21 11:30:00', 'https://example.com/vk-recipe', '1', 'c24', 'vk', 'social', '', '', '0', now()),
+('v25', '2026-07-19', '2026-07-19 12:00:00', 'https://example.com/dzen-pasta', '3', 'c25', 'dzen', 'social', '', '', '0', now()),
+('v26', '2026-07-11', '2026-07-11 18:00:00', 'https://example.com/dzen-cut', '2', 'c26', 'dzen', 'social', '', '', '0', now()),
+('v27', '2026-07-05', '2026-07-05 21:00:00', 'https://example.com/dzen-dessert', '4', 'c27', 'dzen', 'social', '', '', '0', now());
 
 INSERT INTO analytics.raw_video_comments
 (platform, video_id, comment_id, author, text, likes, published_at, _airbyte_extracted_at)
@@ -87,3 +92,17 @@ VALUES
 ('instagram', 'ig_111', 'ic2', 'reels_lover', 'Залипла на повторе', 980, '2026-07-20 18:30:00', now()),
 ('instagram', 'ig_334', 'ic3', 'prep_queen', 'Сколько дней хранится в холодильнике?', 540, '2026-07-06 15:00:00', now()),
 ('instagram', 'ig_335', 'ic4', 'mom_of_two', 'Дети сами мешали — супер идея', 1120, '2026-07-12 19:00:00', now());
+
+INSERT INTO analytics.raw_vk_videos
+(video_id, owner_id, title, description, published_at, duration, views, likes, comments, reposts, player_url, share_url, _airbyte_extracted_at)
+VALUES
+('-100001_1', -100001, 'VK клип: рецепт за минуту', '', toUnixTimestamp('2026-07-21 10:00:00'), 58, 54000, 3200, 145, 890, '', 'https://vk.com/video-100001_1', now()),
+('-100001_2', -100001, 'VK клип: лайфхак на кухне', '', toUnixTimestamp('2026-07-17 15:30:00'), 42, 28000, 1500, 78, 410, '', 'https://vk.com/video-100001_2', now()),
+('-100001_3', -100001, 'VK клип: быстрый завтрак', '', toUnixTimestamp('2026-07-09 08:00:00'), 35, 71000, 4100, 210, 980, '', 'https://vk.com/video-100001_3', now());
+
+INSERT INTO analytics.raw_dzen_shorts
+(publication_id, title, published_at, url, views, likes, comments, content_type, _airbyte_extracted_at)
+VALUES
+('dz_short_1', 'Дзен шортс: рецепт пасты', toUnixTimestamp('2026-07-19 11:00:00'), 'https://dzen.ru/shorts/dz_short_1', 63000, 2800, 156, 'short', now()),
+('dz_short_2', 'Дзен шортс: 3 способа нарезки', toUnixTimestamp('2026-07-11 17:00:00'), 'https://dzen.ru/shorts/dz_short_2', 41000, 1900, 92, 'short', now()),
+('dz_short_3', 'Дзен шортс: десерт за 5 минут', toUnixTimestamp('2026-07-05 20:00:00'), 'https://dzen.ru/shorts/dz_short_3', 88000, 5200, 340, 'short', now());

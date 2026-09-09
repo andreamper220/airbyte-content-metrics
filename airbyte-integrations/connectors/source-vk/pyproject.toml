@@ -1,0 +1,24 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+version = "0.1.0"
+name = "source-vk"
+description = "Source implementation for VK short videos (clips)."
+authors = ["Airbyte <contact@airbyte.io>"]
+license = "ELv2"
+readme = "README.md"
+packages = [{ include = "source_vk" }]
+
+[tool.poetry.dependencies]
+python = "^3.9,<3.12"
+airbyte-cdk = "0.80.0"
+pendulum = "^3.0.0"
+
+[tool.poetry.scripts]
+source-vk = "source_vk.run:run"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+requests-mock = "^1.9.3"

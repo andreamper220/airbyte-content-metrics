@@ -1,0 +1,48 @@
+documentationUrl: https://dzen.ru/help/publishers
+connectionSpecification:
+  $schema: https://json-schema.org/draft-07/schema#
+  title: Yandex Dzen Short Videos Spec
+  type: object
+  required:
+    - channel_name
+  additionalProperties: true
+  properties:
+    channel_name:
+      type: string
+      title: Channel Name
+      description: Dzen channel slug from the URL (e.g. "mychannel" for https://dzen.ru/mychannel).
+      order: 0
+    session_id:
+      type: string
+      title: Session ID (optional)
+      description: Yandex Session_id cookie for authenticated requests to the publisher API. Improves access to your own channel stats.
+      airbyte_secret: true
+      order: 1
+    csrf_token:
+      type: string
+      title: CSRF Token (optional)
+      description: x-csrf-token header value from a logged-in Dzen session. Required together with session_id for publisher API.
+      airbyte_secret: true
+      order: 2
+    publisher_id:
+      type: string
+      title: Publisher ID (optional)
+      description: Publisher cabinet ID from the Dzen editor URL. Used with session_id for publisher API sync.
+      order: 3
+    start_date:
+      type: string
+      title: Start Date
+      description: Only sync shorts published on or after this date (YYYY-MM-DD). Optional.
+      pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+      format: date
+      examples:
+        - "2024-01-01"
+      order: 4
+    max_pages:
+      type: integer
+      title: Max Pages
+      description: Maximum number of feed pages to fetch per sync.
+      default: 20
+      minimum: 1
+      maximum: 100
+      order: 5

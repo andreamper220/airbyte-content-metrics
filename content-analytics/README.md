@@ -22,7 +22,7 @@ docker compose up -d --build
 # Дашборд: http://localhost:8080
 ```
 
-**VPS: полный стек (Airbyte + ClickHouse + дашборд + TikTok-коннектор):**
+**VPS: полный стек (Airbyte + ClickHouse + дашборд + кастомные коннекторы TikTok/VK/Dzen):**
 
 ```bash
 cd deploy

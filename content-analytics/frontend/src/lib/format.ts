@@ -13,6 +13,10 @@ export function platformColor(platform: string): string {
       return "#69c9d0"
     case "instagram":
       return "#e1306c"
+    case "vk":
+      return "#0077ff"
+    case "dzen":
+      return "#ffaa00"
     default:
       return "#7c5cff"
   }

@@ -84,7 +84,7 @@ export function DashboardPage() {
     <div className="mx-auto max-w-7xl p-6">
       <AppHeader
         title="Content Analytics"
-        subtitle={`YouTube · TikTok · Instagram · Яндекс.Метрика · ${statusLine}`}
+        subtitle={`YouTube · TikTok · Instagram · VK · Dzen · Яндекс.Метрика · ${statusLine}`}
         days={days}
         onDaysChange={setDays}
         onRefresh={handleRefresh}

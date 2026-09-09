@@ -96,6 +96,28 @@ services:
     image: airbyte/source-tiktok-business:${TIKTOK_CONNECTOR_TAG:-dev}
     entrypoint: ["true"]
 
+  source-vk:
+    profiles: ["build-connectors"]
+    build:
+      context: ../airbyte-integrations/connectors/source-vk
+      dockerfile: ../../../docker-images/Dockerfile.python-connector
+      args:
+        BASE_IMAGE: docker.io/airbyte/python-connector-base:4.0.0@sha256:d9894b6895923b379f3006fa251147806919c62b7d9021b5cd125bb67d7bbe22
+        CONNECTOR_NAME: source-vk
+    image: airbyte/source-vk:${VK_CONNECTOR_TAG:-dev}
+    entrypoint: ["true"]
+
+  source-dzen:
+    profiles: ["build-connectors"]
+    build:
+      context: ../airbyte-integrations/connectors/source-dzen
+      dockerfile: ../../../docker-images/Dockerfile.python-connector
+      args:
+        BASE_IMAGE: docker.io/airbyte/python-connector-base:4.0.0@sha256:d9894b6895923b379f3006fa251147806919c62b7d9021b5cd125bb67d7bbe22
+        CONNECTOR_NAME: source-dzen
+    image: airbyte/source-dzen:${DZEN_CONNECTOR_TAG:-dev}
+    entrypoint: ["true"]
+
 networks:
   analytics:
     name: content-analytics
