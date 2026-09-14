@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom"
-import { Settings2 } from "lucide-react"
+import { LogOut, Settings2 } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/auth-context"
 import {
   Select,
   SelectContent,
@@ -34,6 +35,8 @@ export function AppHeader({
   backLabel,
   actions,
 }: AppHeaderProps) {
+  const { authEnabled, email, logout } = useAuth()
+
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div>
@@ -71,6 +74,15 @@ export function AppHeader({
           </Button>
         ) : null}
         {actions}
+        {authEnabled && email ? (
+          <>
+            <span className="hidden text-sm text-muted-foreground sm:inline">{email}</span>
+            <Button variant="outline" size="sm" onClick={() => void logout()}>
+              <LogOut />
+              Выйти
+            </Button>
+          </>
+        ) : null}
       </div>
     </header>
   )

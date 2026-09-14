@@ -23,5 +23,12 @@ class Settings(BaseSettings):
     airbyte_password: str = ""
     airbyte_connection_ids: str = ""
 
+    # Google OAuth (dashboard login)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    session_secret: str = ""
+    oauth_redirect_uri: str = "http://localhost:8080/auth/callback"
+    allowed_emails: str = "anrewwolf68@gmail.com,danzobond@gmail.com"
+
 
 settings = Settings()

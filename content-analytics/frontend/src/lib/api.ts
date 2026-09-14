@@ -82,8 +82,19 @@ export type UtmMappingResponse = {
   platforms: string[]
 }
 
+export type AuthMeResponse = {
+  email: string | null
+  auth_enabled: boolean
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init)
+  const res = await fetch(url, { credentials: "include", ...init })
+  if (res.status === 401) {
+    if (!url.startsWith("/auth/me")) {
+      window.location.href = "/login"
+    }
+    throw new Error("Unauthorized")
+  }
   if (!res.ok) {
     throw new Error(await res.text())
   }
@@ -91,6 +102,8 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  me: () => fetchJson<AuthMeResponse>("/auth/me"),
+  logout: () => fetchJson<{ ok: boolean }>("/auth/logout", { method: "POST" }),
   summary: (days: number) => fetchJson<SummaryRow[]>(`/api/summary?days=${days}`),
   trend: (days: number) => fetchJson<TrendRow[]>(`/api/trend?days=${days}`),
   correlation: (days: number) => fetchJson<CorrelationRow[]>(`/api/correlation?days=${days}`),

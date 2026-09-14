@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.32.0" \
     "clickhouse-connect>=0.8.0" \
-    "pydantic-settings>=2.6.0"
+    "pydantic-settings>=2.6.0" \
+    "authlib>=1.3.0" \
+    "httpx>=0.27.0"
 
 COPY app ./app
 COPY --from=frontend-build /frontend/dist ./frontend/dist

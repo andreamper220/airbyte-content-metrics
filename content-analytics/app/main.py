@@ -2,11 +2,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth import is_auth_enabled, require_user, router as auth_router
 from app.config import settings
 from app.db import get_client, query
 from app.refresh_service import get_refresh_status, run_refresh_cycle
@@ -36,6 +38,16 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Content Analytics", version="0.2.0", lifespan=lifespan)
 
+if is_auth_enabled():
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret,
+        same_site="lax",
+        https_only=settings.oauth_redirect_uri.startswith("https://"),
+    )
+
+app.include_router(auth_router)
+
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 FRONTEND_INDEX = FRONTEND_DIST / "index.html"
 
@@ -49,18 +61,21 @@ class UtmMappingPayload(BaseModel):
     mappings: list[UtmMappingRow]
 
 
-@app.get("/api/settings/utm-map")
+api = APIRouter(prefix="/api", dependencies=[Depends(require_user)])
+
+
+@api.get("/settings/utm-map")
 async def api_get_utm_map():
     return {"mappings": get_utm_mapping(), "platforms": PLATFORMS}
 
 
-@app.put("/api/settings/utm-map")
+@api.put("/settings/utm-map")
 async def api_save_utm_map(payload: UtmMappingPayload):
     saved = save_utm_mapping([row.model_dump() for row in payload.mappings])
     return {"mappings": saved}
 
 
-@app.get("/api/refresh/status")
+@api.get("/refresh/status")
 async def refresh_status():
     return {
         **get_refresh_status(),
@@ -71,17 +86,17 @@ async def refresh_status():
     }
 
 
-@app.post("/api/refresh")
+@api.post("/refresh")
 async def refresh_marts():
     return await asyncio.to_thread(run_refresh_cycle, trigger="manual")
 
 
-@app.get("/api/viral")
+@api.get("/viral")
 async def viral_videos(days: int = 30):
     return query(TOP_VIRAL, {"days": days})
 
 
-@app.get("/api/video/{platform}/{video_id}")
+@api.get("/video/{platform}/{video_id}")
 async def video_detail(platform: str, video_id: str):
     rows = query(VIDEO_DETAIL, {"platform": platform, "video_id": video_id})
     if not rows:
@@ -96,19 +111,22 @@ async def video_detail(platform: str, video_id: str):
     }
 
 
-@app.get("/api/correlation")
+@api.get("/correlation")
 async def correlation(days: int = 30):
     return query(PLATFORM_CORRELATION, {"days": days})
 
 
-@app.get("/api/summary")
+@api.get("/summary")
 async def summary(days: int = 30):
     return query(PLATFORM_SUMMARY, {"days": days})
 
 
-@app.get("/api/trend")
+@api.get("/trend")
 async def trend(days: int = 30):
     return query(DAILY_TREND, {"days": days})
+
+
+app.include_router(api)
 
 
 @app.get("/health")
@@ -136,6 +154,11 @@ async def dashboard():
 
 @app.get("/settings")
 async def settings_page():
+    return _serve_frontend_index()
+
+
+@app.get("/login")
+async def login_page():
     return _serve_frontend_index()
 
 
