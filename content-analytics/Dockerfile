@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir \
     "clickhouse-connect>=0.8.0" \
     "pydantic-settings>=2.6.0" \
     "authlib>=1.3.0" \
-    "httpx>=0.27.0"
+    "httpx>=0.27.0" \
+    "itsdangerous>=2.2.0"
 
 COPY app ./app
 COPY --from=frontend-build /frontend/dist ./frontend/dist
