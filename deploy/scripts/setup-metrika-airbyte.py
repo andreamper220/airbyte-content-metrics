@@ -162,7 +162,7 @@ def main() -> int:
             "prefix": "raw_metrika_",
             "status": "active",
             "scheduleType": "basic",
-            "scheduleData": {"basicSchedule": {"units": 6, "timeUnit": "hours"}},
+            "scheduleData": {"basicSchedule": {"units": 15, "timeUnit": "minutes"}},
             "syncCatalog": {"streams": [stream_cfg]},
         },
     )

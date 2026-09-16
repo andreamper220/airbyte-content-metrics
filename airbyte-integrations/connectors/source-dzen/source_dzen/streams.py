@@ -58,6 +58,11 @@ def _is_short_item(item: Mapping[str, Any]) -> bool:
         value = str(item.get(key) or "").lower()
         if "short" in value:
             return True
+        if value in {"gif", "video", "short_video", "vertical_video"}:
+            return True
+    # Channel feed cards (e.g. generator_video) often omit /shorts/ in API payloads.
+    if link and "dzen.ru" in link and _extract_title(item):
+        return True
     return False
 
 
@@ -229,7 +234,7 @@ class Shorts(DzenStream, IncrementalMixin):
     ) -> str:
         if next_page_token and next_page_token.get("url"):
             return next_page_token["url"]
-        return super().request_url(stream_state, stream_slice, next_page_token)
+        return f"{self.url_base}{self.path()}"
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         try:
@@ -322,6 +327,24 @@ class Shorts(DzenStream, IncrementalMixin):
             timeout=30,
         )
 
+    def _fetch_export_feed(self, cutoff: Optional[int]) -> Iterable[Mapping[str, Any]]:
+        url = f"{self.url_base}api/v3/launcher/export"
+        response = requests.get(
+            url,
+            params={"channel_name": self.channel_name, "country_code": "ru"},
+            headers=self.request_headers({}),
+            cookies=self._session_cookies(),
+            timeout=30,
+        )
+        if response.status_code != 200:
+            logger.warning("Dzen export feed returned HTTP %s", response.status_code)
+            return
+        try:
+            payload = response.json()
+        except ValueError:
+            return
+        yield from self._records_from_payload(payload, cutoff)
+
     def read_records(
         self,
         sync_mode: SyncMode,
@@ -332,9 +355,13 @@ class Shorts(DzenStream, IncrementalMixin):
         cutoff = self._start_timestamp(stream_state or {})
         seen_ids: set[str] = set()
 
+        for record in self._fetch_export_feed(cutoff):
+            seen_ids.add(record["publication_id"])
+            yield StreamData(record=record, associated_slice=stream_slice or {})
+
         for record in self._fetch_publisher_shorts(cutoff):
             seen_ids.add(record["publication_id"])
-            yield record
+            yield StreamData(record=record, associated_slice=stream_slice or {})
 
         page = 0
         next_token: Optional[Mapping[str, Any]] = None
@@ -353,7 +380,7 @@ class Shorts(DzenStream, IncrementalMixin):
                 if record["publication_id"] in seen_ids:
                     continue
                 seen_ids.add(record["publication_id"])
-                yield record
+                yield StreamData(record=record, associated_slice=stream_slice or {})
             next_token = self.next_page_token(response)
             if not next_token:
                 break

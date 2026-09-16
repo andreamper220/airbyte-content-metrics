@@ -204,7 +204,7 @@ def ensure_connection(
             "prefix": table_prefix,
             "status": "active",
             "scheduleType": "basic",
-            "scheduleData": {"basicSchedule": {"units": 6, "timeUnit": "hours"}},
+            "scheduleData": {"basicSchedule": {"units": 15, "timeUnit": "minutes"}},
             "syncCatalog": sync_catalog,
         },
     )
@@ -243,11 +243,15 @@ def main() -> int:
     env = load_env(root / ".env")
     host = env.get("AIRBYTE_HOST", "content.netvolk.online")
     vk_only = "--vk-only" in sys.argv
+    dzen_only = "--dzen-only" in sys.argv
+    if vk_only and dzen_only:
+        print("Use only one of --vk-only or --dzen-only")
+        return 1
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     vk_config_path = Path(args[0]) if len(args) > 0 else root / "secrets" / "source-vk-config.json"
     dzen_config_path = Path(args[1]) if len(args) > 1 else root / "secrets" / "source-dzen-config.json"
 
-    vk_config = json.loads(vk_config_path.read_text())
+    vk_config = json.loads(vk_config_path.read_text()) if not dzen_only else {}
     dzen_config = json.loads(dzen_config_path.read_text()) if not vk_only else {}
 
     email = env.get("AIRBYTE_USERNAME", "")
@@ -266,7 +270,7 @@ def main() -> int:
 
     print("==> Build connector images")
     if os.environ.get("SKIP_CONNECTOR_BUILD") != "1":
-        build_targets = ["source-vk"] if vk_only else ["source-vk", "source-dzen"]
+        build_targets = ["source-vk"] if vk_only else ["source-dzen"] if dzen_only else ["source-vk", "source-dzen"]
         subprocess.check_call(["docker", "compose", "--profile", "build-connectors", "build", *build_targets], cwd=root)
     cluster = env.get("AIRBYTE_KIND_CLUSTER", "airbyte-abctl")
     if subprocess.call(["bash", "-lc", "command -v kind >/dev/null"], cwd=root) == 0:
@@ -293,14 +297,16 @@ def main() -> int:
     print(f"Workspace: {workspace_id}")
     print(f"Destination: {destination_id}")
 
-    vk_def = find_source_definition(client, workspace_id, "airbyte/source-vk", "VK Short Videos")
-    vk_source = ensure_source(client, workspace_id, "VK Short Videos", vk_def, vk_config)
-    vk_conn = ensure_connection(
-        client, workspace_id, "VK Short Videos", vk_source, destination_id, "short_videos", "raw_vk_", "videos"
-    )
-    new_ids = [vk_conn]
+    new_ids: list[str] = []
+    if vk_only or not dzen_only:
+        vk_def = find_source_definition(client, workspace_id, "airbyte/source-vk", "VK Short Videos")
+        vk_source = ensure_source(client, workspace_id, "VK Short Videos", vk_def, vk_config)
+        vk_conn = ensure_connection(
+            client, workspace_id, "VK Short Videos", vk_source, destination_id, "short_videos", "raw_vk_", "videos"
+        )
+        new_ids.append(vk_conn)
 
-    if not vk_only:
+    if dzen_only or (not vk_only and not dzen_only):
         dzen_def = find_source_definition(client, workspace_id, "airbyte/source-dzen", "Yandex Dzen Shorts")
         dzen_source = ensure_source(client, workspace_id, "Yandex Dzen Shorts", dzen_def, dzen_config)
         dzen_conn = ensure_connection(

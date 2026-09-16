@@ -211,12 +211,15 @@ LIMIT 1
 
 VIDEO_COMMENTS = """
 SELECT
-    author,
-    text,
-    likes,
-    published_at
-FROM analytics.raw_video_comments FINAL
-WHERE platform = {platform:String} AND video_id = {video_id:String}
+    argMax(author, _airbyte_extracted_at) AS author,
+    argMax(text, _airbyte_extracted_at) AS text,
+    argMax(likes, _airbyte_extracted_at) AS likes,
+    argMax(published_at, _airbyte_extracted_at) AS published_at
+FROM analytics.raw_video_comments
+WHERE platform = {platform:String}
+  AND video_id = {video_id:String}
+  AND coalesce(comment_id, '') != ''
+GROUP BY comment_id
 ORDER BY likes DESC, published_at DESC
 """
 

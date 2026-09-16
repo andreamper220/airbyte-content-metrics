@@ -168,7 +168,7 @@ PY
     \"prefix\":\"$table_prefix\",
     \"status\":\"active\",
     \"scheduleType\":\"basic\",
-    \"scheduleData\":{\"basicSchedule\":{\"units\":6,\"timeUnit\":\"hours\"}},
+    \"scheduleData\":{\"basicSchedule\":{\"units\":15,\"timeUnit\":\"minutes\"}},
     \"syncCatalog\":$sync_catalog
   }" | python3 -c 'import sys,json; print(json.load(sys.stdin)["connectionId"])')"
   echo "Created connection: $connection_id"

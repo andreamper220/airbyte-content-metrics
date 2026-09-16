@@ -457,7 +457,7 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 | `AUTO_REFRESH_ENABLED` | `true` | Фоновое обновление витрин |
 | `MART_REFRESH_INTERVAL_MINUTES` | `15` | Интервал пересборки витрин |
 | `AIRBYTE_SYNC_ENABLED` | `false` | Запускать синки Airbyte через API |
-| `AIRBYTE_SYNC_INTERVAL_MINUTES` | `360` | Как часто дергать Airbyte (6 ч) |
+| `AIRBYTE_SYNC_INTERVAL_MINUTES` | `15` | Как часто дергать Airbyte (15 мин) |
 | `AIRBYTE_API_URL` | — | Напр. `http://127.0.0.1:8000` |
 | `AIRBYTE_USERNAME` / `AIRBYTE_PASSWORD` | — | Из `abctl local credentials` |
 | `AIRBYTE_CONNECTION_IDS` | — | UUID connections через запятую |

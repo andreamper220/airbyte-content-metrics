@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Optional: trigger Airbyte connection syncs before mart refresh
     airbyte_sync_enabled: bool = False
-    airbyte_sync_interval_minutes: int = 360
+    airbyte_sync_interval_minutes: int = 15
     airbyte_api_url: str = ""
     airbyte_username: str = ""
     airbyte_password: str = ""

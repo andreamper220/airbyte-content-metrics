@@ -103,20 +103,8 @@ CREATE TABLE IF NOT EXISTS analytics.raw_vk_videos
 ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
 ORDER BY (video_id);
 
-CREATE TABLE IF NOT EXISTS analytics.raw_dzen_shorts
-(
-    publication_id String,
-    title String,
-    published_at Int64,
-    url String,
-    views UInt64,
-    likes UInt64,
-    comments UInt64,
-    content_type LowCardinality(String),
-    _airbyte_extracted_at DateTime64(3) DEFAULT now()
-)
-ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
-ORDER BY (publication_id);
+-- raw_dzen_shorts is created by Airbyte (source-dzen, stream shorts).
+-- Do not CREATE it here: a manual schema blocks sync (missing _airbyte_raw_id / _airbyte_meta).
 
 CREATE TABLE IF NOT EXISTS analytics.raw_video_comments
 (
@@ -266,18 +254,34 @@ SELECT * FROM (
     UNION ALL
 
     SELECT
+        'vk' AS platform,
+        coalesce(video_id, '') AS video_id,
+        coalesce(title, '') AS title,
+        toDateTime(coalesce(published_at, 0)) AS published_at,
+        coalesce(share_url, '') AS url,
+        toUInt64(coalesce(views, 0)) AS views,
+        toUInt64(coalesce(likes, 0)) AS likes,
+        toUInt64(coalesce(comments, 0)) AS comments,
+        toUInt64(coalesce(reposts, 0)) AS shares,
+        0 AS reach,
+        now() AS snapshot_at
+    FROM analytics.raw_vk_short_videos
+
+    UNION ALL
+
+    SELECT
         'dzen' AS platform,
-        publication_id AS video_id,
-        title,
-        toDateTime(published_at) AS published_at,
-        url,
-        views,
-        likes,
-        comments,
+        coalesce(publication_id, '') AS video_id,
+        coalesce(title, '') AS title,
+        toDateTime(coalesce(published_at, 0)) AS published_at,
+        coalesce(url, '') AS url,
+        toUInt64(coalesce(views, 0)) AS views,
+        toUInt64(coalesce(likes, 0)) AS likes,
+        toUInt64(coalesce(comments, 0)) AS comments,
         0 AS shares,
         0 AS reach,
         now() AS snapshot_at
-    FROM analytics.raw_dzen_shorts FINAL
+    FROM analytics.raw_dzen_shorts
 );
 
 -- Platform → utm_source mapping (editable via /settings UI)

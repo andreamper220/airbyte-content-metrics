@@ -168,3 +168,48 @@ class ShortVideos(VkStream, IncrementalMixin):
         stream_state: Mapping[str, Any] = None,
     ) -> Iterable[StreamData]:
         yield from super().read_records(sync_mode, cursor_field, stream_slice, stream_state)
+        if self.config.get("include_wall_videos", True):
+            yield from self._read_wall_video_records(stream_state, stream_slice)
+
+    def _read_wall_video_records(
+        self,
+        stream_state: Mapping[str, Any] = None,
+        stream_slice: Mapping[str, Any] = None,
+    ) -> Iterable[StreamData]:
+        cutoff = self._start_timestamp(stream_state or {})
+        seen: set[str] = set()
+        offset = 0
+        while True:
+            params = {
+                "owner_id": self.owner_id,
+                "count": self.page_size,
+                "offset": offset,
+                "access_token": self.config["access_token"],
+                "v": self.api_version,
+            }
+            response = requests.get(f"{self.url_base}wall.get", params=params, timeout=30)
+            self._check_response(response)
+            data = response.json().get("response", {})
+            posts = data.get("items") or []
+            for post in posts:
+                for attachment in post.get("attachments") or []:
+                    if attachment.get("type") != "video":
+                        continue
+                    video = attachment.get("video") or {}
+                    if not video.get("id"):
+                        continue
+                    if not self._is_short_video(video):
+                        continue
+                    record = self._normalize_video(video)
+                    if cutoff and record["published_at"] < cutoff:
+                        continue
+                    if record["video_id"] in seen:
+                        continue
+                    seen.add(record["video_id"])
+                    if self._cursor_value is None or record["published_at"] > self._cursor_value:
+                        self._cursor_value = record["published_at"]
+                    yield StreamData(record=record, associated_slice=stream_slice or {})
+            total = int(data.get("count") or 0)
+            offset += len(posts)
+            if offset >= total or not posts:
+                break
