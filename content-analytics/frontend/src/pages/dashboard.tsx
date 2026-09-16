@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { api, type CorrelationRow, type RefreshStatus, type SummaryRow, type VideoDetailResponse, type ViralRow } from "@/lib/api"
+import {
+  api,
+  type CorrelationRow,
+  type MetrikaStatus,
+  type RefreshStatus,
+  type SummaryRow,
+  type VideoDetailResponse,
+} from "@/lib/api"
 import { fmt, platformColor } from "@/lib/format"
 import { AppHeader } from "@/components/layout/app-header"
 import { TrendChart } from "@/components/dashboard/trend-chart"
@@ -17,32 +24,58 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+const WEEKLY_PLATFORMS = new Set(["youtube", "tiktok", "instagram"])
+
+function clickRowSpans(rows: CorrelationRow[]): number[] {
+  const spans = Array.from({ length: rows.length }, () => 1)
+  let i = 0
+  while (i < rows.length) {
+    const row = rows[i]
+    const weekKey = WEEKLY_PLATFORMS.has(row.platform) ? `${row.platform}:${row.week_start}` : ""
+    if (!weekKey) {
+      i += 1
+      continue
+    }
+    let j = i + 1
+    while (j < rows.length && `${rows[j].platform}:${rows[j].week_start}` === weekKey) {
+      spans[j] = 0
+      j += 1
+    }
+    spans[i] = j - i
+    i = j
+  }
+  return spans
+}
+
 export function DashboardPage() {
   const [days, setDays] = useState("30")
   const [refreshing, setRefreshing] = useState(false)
   const [summary, setSummary] = useState<SummaryRow[]>([])
   const [trend, setTrend] = useState<Awaited<ReturnType<typeof api.trend>>>([])
   const [correlation, setCorrelation] = useState<CorrelationRow[]>([])
-  const [viral, setViral] = useState<ViralRow[]>([])
   const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null)
+  const [metrikaStatus, setMetrikaStatus] = useState<MetrikaStatus | null>(null)
   const [videoOpen, setVideoOpen] = useState(false)
   const [videoData, setVideoData] = useState<VideoDetailResponse | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
 
   const loadAll = useCallback(async () => {
     const daysNum = Number(days)
-    const [summaryData, trendData, correlationData, viralData, statusData] = await Promise.all([
+    const [summaryData, trendData, correlationData, statusData, metrikaData] = await Promise.all([
       api.summary(daysNum),
       api.trend(daysNum),
       api.correlation(daysNum),
-      api.viral(daysNum),
       api.refreshStatus(),
+      api.metrikaStatus(daysNum),
     ])
     setSummary(summaryData)
     setTrend(trendData)
     setCorrelation(correlationData)
-    setViral(viralData)
     setRefreshStatus(statusData)
+    setMetrikaStatus(metrikaData)
   }, [days])
+
+  const clickSpans = useMemo(() => clickRowSpans(correlation), [correlation])
 
   useEffect(() => {
     void loadAll()
@@ -75,9 +108,17 @@ export function DashboardPage() {
     : "Загрузка…"
 
   async function openVideo(platform: string, videoId: string) {
-    const data = await api.video(platform, videoId)
-    setVideoData(data)
+    const id = videoId.trim()
+    if (!id) return
+    setVideoError(null)
+    setVideoData(null)
     setVideoOpen(true)
+    try {
+      const data = await api.video(platform, id)
+      setVideoData(data)
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Не удалось загрузить ролик")
+    }
   }
 
   return (
@@ -105,7 +146,7 @@ export function DashboardPage() {
             <CardContent>
               <div className="text-3xl font-bold">{fmt(row.views)}</div>
               <p className="text-sm text-muted-foreground">
-                {row.videos} видео · {fmt(row.likes)} лайков
+                {row.videos} видео · {fmt(row.likes)} лайков · {fmt(row.unique_clicks)} кликов
               </p>
             </CardContent>
           </Card>
@@ -116,25 +157,39 @@ export function DashboardPage() {
         <TrendChart data={trend} days={Number(days)} />
       </div>
 
+      {metrikaStatus && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Метрика: {fmt(metrikaStatus.raw_sessions)} визитов всего, {fmt(metrikaStatus.utm_sessions)} с UTM,{" "}
+          {fmt(metrikaStatus.utm_sessions_period)} с UTM за выбранный период.
+          {metrikaStatus.utm_sessions > 0 && metrikaStatus.utm_sessions_period === 0
+            ? " Клики есть, но старше фильтра дат — поставьте 90 дней."
+            : ""}
+          {metrikaStatus.error ? ` ${metrikaStatus.error}` : ""}
+        </p>
+      )}
+
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Корреляция: платформа → UTM source → сессии</CardTitle>
+          <CardTitle>Площадка по дням</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            YouTube / TikTok / Instagram: колонка «Клики» общая на всю неделю (ссылка в bio), даже если роликов несколько.
+            VK / Дзен: клики за этот день. Цифра по ролику — откройте строку.
+          </p>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[330px] rounded-md border">
+          <ScrollArea className="h-[480px] rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Дата</TableHead>
                   <TableHead>Платформа</TableHead>
                   <TableHead>Просмотры</TableHead>
-                  <TableHead>Топ-видео</TableHead>
-                  <TableHead>Сессии (web)</TableHead>
-                  <TableHead>sessions/view</TableHead>
+                  <TableHead>Топ-видео дня</TableHead>
+                  <TableHead>Клики</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {correlation.map((row) => (
+                {correlation.map((row, index) => (
                   <TableRow
                     key={`${row.date}-${row.platform}-${row.top_video_id ?? "none"}`}
                     className={row.top_video_id ? "cursor-pointer" : undefined}
@@ -150,8 +205,18 @@ export function DashboardPage() {
                     </TableCell>
                     <TableCell>{fmt(row.total_views)}</TableCell>
                     <TableCell>{row.top_video_title || "—"}</TableCell>
-                    <TableCell>{fmt(row.web_sessions)}</TableCell>
-                    <TableCell>{row.sessions_per_view ?? "—"}</TableCell>
+                    {clickSpans[index] > 0 ? (
+                      <TableCell rowSpan={clickSpans[index]} className="align-middle">
+                        <div className="font-medium">{fmt(row.unique_clicks)}</div>
+                        {row.clicks_scope === "week" && row.week_start ? (
+                          <div className="text-xs text-muted-foreground">
+                            неделя {row.week_start} — {row.week_end}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">за день</div>
+                        )}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -160,45 +225,18 @@ export function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Топ роликов («выстрелившие»)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[330px] rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Платформа</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Просмотры</TableHead>
-                  <TableHead>Лайки</TableHead>
-                  <TableHead>Сессии в день публикации</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {viral.map((row) => (
-                  <TableRow
-                    key={`${row.platform}-${row.video_id}`}
-                    className="cursor-pointer"
-                    onClick={() => void openVideo(row.platform, row.video_id)}
-                  >
-                    <TableCell>
-                      <Badge style={{ color: platformColor(row.platform) }}>{row.platform}</Badge>
-                    </TableCell>
-                    <TableCell>{row.title?.slice(0, 60) || "—"}</TableCell>
-                    <TableCell>{fmt(row.views)}</TableCell>
-                    <TableCell>{fmt(row.likes)}</TableCell>
-                    <TableCell>{fmt(row.publish_day_sessions)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
-      <VideoDialog open={videoOpen} onOpenChange={setVideoOpen} data={videoData} />
+      <VideoDialog
+        open={videoOpen}
+        onOpenChange={(open) => {
+          setVideoOpen(open)
+          if (!open) {
+            setVideoData(null)
+            setVideoError(null)
+          }
+        }}
+        data={videoData}
+        error={videoError}
+      />
     </div>
   )
 }

@@ -263,9 +263,17 @@ Source: `source-instagram` (Meta Graph API)
 
 ### Что нужно
 
-1. [VK для разработчиков](https://dev.vk.com/) → приложение
-2. Access token с правом `video` (сервисный ключ сообщества или пользовательский токен)
-3. `owner_id` — ID пользователя или сообщества (для групп со знаком `-`, напр. `-123456789`)
+1. [VK для разработчиков](https://dev.vk.com/) → Web-приложение, redirect `https://ваш-домен/vk-oauth-callback`
+2. **Пользовательский** access token с правом `video` (ключ из «Работа с API» в группе **не** подходит для `video.get`)
+3. `owner_id` — ID сообщества со знаком `-` (напр. `-236233101`)
+
+Получить токен без ручного PKCE: на VPS в каталоге `deploy/` задайте `VK_APP_ID` в `.env` и выполните:
+
+```bash
+python3 scripts/vk-oauth-login.py --paste
+```
+
+Откройте напечатанную ссылку → «Разрешить» → вставьте URL из адресной строки. Токен сохранится в `secrets/source-vk-config.json`.
 
 ### Сборка образа для Airbyte
 
@@ -368,7 +376,9 @@ Source: `source-yandex-metrica`
 
 | Stream | ClickHouse | Поля для корреляции |
 |--------|------------|---------------------|
-| `sessions` | `raw_metrika_sessions` | `UTMSource`, `UTMMedium`, `UTMContent`, `startURL`, `date`, `clientID`, `pageViews` |
+| `sessions` | `raw_metrika_sessions` | `UTMSource`, `UTMMedium`, `UTMContent`, `UTMCampaign`, `startURL`, `date`, `clientID`, `pageViews` |
+
+> Таблицу `raw_metrika_sessions` создаёт **Airbyte** (нужны колонки `_airbyte_raw_id`, `_airbyte_meta`). Ручной `CREATE` из старых версий init.sql ломает синк.
 
 Config:
 ```json

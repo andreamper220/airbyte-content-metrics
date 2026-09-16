@@ -32,6 +32,8 @@ def _iso(dt: datetime | None) -> str | None:
 
 def refresh_marts() -> None:
     client = get_client()
+    client.command("TRUNCATE TABLE analytics.mart_web_traffic_daily")
+    client.command("TRUNCATE TABLE analytics.mart_platform_daily")
     for sql in (REFRESH_MART_VIDEOS, REFRESH_WEB_TRAFFIC, REFRESH_PLATFORM_DAILY):
         client.command(sql)
 

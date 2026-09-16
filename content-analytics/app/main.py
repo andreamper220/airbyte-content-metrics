@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,14 +16,32 @@ from app.refresh_service import get_refresh_status, run_refresh_cycle
 from app.scheduler import auto_refresh_loop
 from app.queries import (
     DAILY_TREND,
+    METRIKA_STATUS,
     PLATFORM_CORRELATION,
     PLATFORM_SUMMARY,
-    TOP_VIRAL,
+    VIDEO_CLICKS,
     VIDEO_COMMENTS,
     VIDEO_DETAIL,
 )
 from app.settings_store import PLATFORMS, get_utm_mapping, save_utm_mapping
 from app.video_embed import build_embed
+
+logger = logging.getLogger(__name__)
+
+
+def _jsonable_row(row: dict) -> dict:
+    out = {}
+    for key, value in row.items():
+        out[key] = value.isoformat() if hasattr(value, "isoformat") else value
+    return out
+
+
+def _safe_query(sql: str, params: dict | None = None) -> list[dict]:
+    try:
+        return query(sql, params)
+    except Exception:
+        logger.exception("ClickHouse query failed")
+        return []
 
 
 @asynccontextmanager
@@ -93,7 +112,7 @@ async def refresh_marts():
 
 @api.get("/viral")
 async def viral_videos(days: int = 30):
-    return query(TOP_VIRAL, {"days": days})
+    return []
 
 
 @api.get("/video/{platform}/{video_id}")
@@ -101,13 +120,28 @@ async def video_detail(platform: str, video_id: str):
     rows = query(VIDEO_DETAIL, {"platform": platform, "video_id": video_id})
     if not rows:
         raise HTTPException(status_code=404, detail="Video not found")
-    video = rows[0]
-    comments = query(VIDEO_COMMENTS, {"platform": platform, "video_id": video_id})
+    video = _jsonable_row(rows[0])
+    comments = [_jsonable_row(row) for row in _safe_query(VIDEO_COMMENTS, {"platform": platform, "video_id": video_id})]
+    click_rows = _safe_query(VIDEO_CLICKS, {"platform": platform, "video_id": video_id})
+    clicks = _jsonable_row(click_rows[0]) if click_rows else {}
+    unique = int(clicks.get("unique_clicks") or 0)
+    mode = clicks.get("mode") or (
+        "per_video" if platform in {"vk", "dzen"} else "weekly_bio"
+    )
     return {
         "video": video,
         "description": video.get("title") or "",
         "embed": build_embed(platform, video_id, video.get("url") or ""),
         "comments": comments,
+        "clicks": {
+            "mode": mode,
+            "utm_content": clicks.get("utm_content") or "",
+            "week_start": str(clicks.get("week_start") or ""),
+            "week_end": str(clicks.get("week_end") or ""),
+            "unique_clicks": unique,
+            "sessions": int(clicks.get("sessions") or 0),
+            "amount_rub": unique * 20 if mode == "weekly_bio" else None,
+        },
     }
 
 
@@ -124,6 +158,27 @@ async def summary(days: int = 30):
 @api.get("/trend")
 async def trend(days: int = 30):
     return query(DAILY_TREND, {"days": days})
+
+
+@api.get("/web/metrika-status")
+async def web_metrika_status(days: int = 30):
+    try:
+        rows = query(METRIKA_STATUS, {"days": days})
+        row = rows[0] if rows else {}
+        return {
+            "raw_sessions": int(row.get("raw_sessions") or 0),
+            "utm_sessions": int(row.get("utm_sessions") or 0),
+            "utm_sessions_period": int(row.get("utm_sessions_period") or 0),
+            "last_extracted_at": row.get("last_extracted_at"),
+        }
+    except Exception as exc:
+        return {
+            "raw_sessions": 0,
+            "utm_sessions": 0,
+            "utm_sessions_period": 0,
+            "last_extracted_at": None,
+            "error": str(exc),
+        }
 
 
 app.include_router(api)

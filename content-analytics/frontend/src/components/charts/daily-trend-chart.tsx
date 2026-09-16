@@ -66,7 +66,7 @@ function buildSeries(data: TrendRow[]): SeriesConfig[] {
     ]),
     {
       key: "web_sessions",
-      name: "сессии (web)",
+      name: "клики на сайт",
       color: "#34d399",
       dashed: true,
       yAxisId: "right" as const,

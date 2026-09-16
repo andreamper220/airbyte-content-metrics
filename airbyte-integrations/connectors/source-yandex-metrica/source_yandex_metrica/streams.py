@@ -4,9 +4,11 @@
 
 import csv
 import io
+import json
 import logging
 import re
 import time
+from pathlib import Path
 from abc import ABC
 from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
@@ -21,6 +23,7 @@ from airbyte_cdk.sources.streams.http import HttpStream
 
 
 logger = logging.getLogger("airbyte")
+_SCHEMAS_DIR = Path(__file__).resolve().parent / "schemas"
 
 
 class YandexMetricaStream(HttpStream, ABC):
@@ -53,7 +56,10 @@ class YandexMetricaStream(HttpStream, ABC):
         pass
 
     def get_request_fields(self) -> List[str]:
-        return list(super().get_json_schema().get("properties"))
+        # Logs API field names must keep ym:s:/ym:pv: prefixes. get_json_schema() strips them for output records.
+        schema_file = "sessions.json" if self._source == "visits" else "views.json"
+        properties = json.loads((_SCHEMAS_DIR / schema_file).read_text(encoding="utf-8"))["properties"]
+        return list(properties.keys())
 
     @property
     def raise_on_http_errors(self) -> bool:

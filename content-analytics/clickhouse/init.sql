@@ -81,23 +81,8 @@ CREATE TABLE IF NOT EXISTS analytics.raw_ga4_sessions
 ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
 ORDER BY (date, sessionSource, sessionMedium, landingPage);
 
-CREATE TABLE IF NOT EXISTS analytics.raw_metrika_sessions
-(
-    visitID String,
-    date String,
-    dateTime DateTime,
-    startURL String,
-    pageViews String,
-    clientID String,
-    UTMSource String,
-    UTMMedium String,
-    UTMContent String,
-    UTMTerm String,
-    bounce String,
-    _airbyte_extracted_at DateTime64(3) DEFAULT now()
-)
-ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
-ORDER BY (visitID);
+-- raw_metrika_sessions is created by Airbyte (source-yandex-metrica, stream sessions).
+-- Do not CREATE it here: a manual schema blocks sync (missing _airbyte_raw_id / _airbyte_meta).
 
 CREATE TABLE IF NOT EXISTS analytics.raw_vk_videos
 (
@@ -180,13 +165,14 @@ CREATE TABLE IF NOT EXISTS analytics.mart_web_traffic_daily
     utm_source LowCardinality(String),
     utm_medium LowCardinality(String),
     utm_content String,
+    utm_campaign LowCardinality(String),
     landing_page String,
     sessions UInt32,
     users UInt32,
     pageviews UInt32
 )
 ENGINE = ReplacingMergeTree()
-ORDER BY (date, analytics_source, utm_source, utm_medium, landing_page);
+ORDER BY (date, analytics_source, utm_source, utm_medium, utm_content, landing_page);
 
 -- ---------------------------------------------------------------------------
 -- Mart: daily platform totals (for correlation without content_map)

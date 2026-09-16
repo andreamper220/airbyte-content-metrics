@@ -17,6 +17,7 @@ type VideoDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   data: VideoDetailResponse | null
+  error?: string | null
 }
 
 function EmbedView({ embed, url }: { embed: VideoEmbed; url?: string | null }) {
@@ -44,6 +45,20 @@ function EmbedView({ embed, url }: { embed: VideoEmbed; url?: string | null }) {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
       />
+    )
+  }
+
+  if ((embed.type === "link" || embed.type === "fallback") && (embed.url || url)) {
+    const href = embed.url || url || ""
+    return (
+      <div className="flex min-h-[200px] items-center justify-center p-6 text-center text-muted-foreground">
+        <p>
+          Просмотр встроенного плеера недоступен.{" "}
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+            Открыть на платформе
+          </a>
+        </p>
+      </div>
     )
   }
 
@@ -75,7 +90,7 @@ function EmbedView({ embed, url }: { embed: VideoEmbed; url?: string | null }) {
   )
 }
 
-export function VideoDialog({ open, onOpenChange, data }: VideoDialogProps) {
+export function VideoDialog({ open, onOpenChange, data, error }: VideoDialogProps) {
   const video = data?.video
 
   async function copyUrl() {
@@ -90,6 +105,14 @@ export function VideoDialog({ open, onOpenChange, data }: VideoDialogProps) {
           <DialogTitle>{video?.title || "Ролик"}</DialogTitle>
           <DialogDescription>{data?.description || "—"}</DialogDescription>
         </DialogHeader>
+
+        {error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
+
+        {!data && !error ? (
+          <p className="text-sm text-muted-foreground">Загрузка ролика…</p>
+        ) : null}
 
         {data ? (
           <div className="space-y-4">
@@ -118,6 +141,44 @@ export function VideoDialog({ open, onOpenChange, data }: VideoDialogProps) {
                 <strong>{fmt(video?.comment_count)}</strong>
               </div>
             </div>
+
+            {data.clicks ? (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                <h3 className="mb-1 font-medium">Клики на сайт</h3>
+                {data.clicks.mode === "per_video" ? (
+                  <p className="mb-2 text-muted-foreground">
+                    У VK и Дзен клики считаются по ссылке в описании именно этого ролика
+                    {data.clicks.utm_content ? ` (${data.clicks.utm_content})` : ""}.
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-4">
+                  <div>
+                    <span className="text-muted-foreground">Уникальных: </span>
+                    <strong>{fmt(data.clicks.unique_clicks)}</strong>
+                  </div>
+                  {data.clicks.mode === "weekly_bio" && data.clicks.week_start ? (
+                    <div>
+                      <span className="text-muted-foreground">Неделя: </span>
+                      <strong>
+                        {data.clicks.week_start} — {data.clicks.week_end}
+                      </strong>
+                    </div>
+                  ) : null}
+                  {data.clicks.utm_content ? (
+                    <div>
+                      <span className="text-muted-foreground">utm_content: </span>
+                      <strong>{data.clicks.utm_content}</strong>
+                    </div>
+                  ) : null}
+                  {data.clicks.amount_rub != null ? (
+                    <div>
+                      <span className="text-muted-foreground">К оплате: </span>
+                      <strong>{fmt(data.clicks.amount_rub)} ₽</strong>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div>
               <h3 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">

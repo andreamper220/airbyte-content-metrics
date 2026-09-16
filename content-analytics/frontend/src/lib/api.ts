@@ -3,6 +3,7 @@ export type SummaryRow = {
   views: number
   videos: number
   likes: number
+  unique_clicks?: number
 }
 
 export type TrendRow = {
@@ -19,8 +20,11 @@ export type CorrelationRow = {
   total_views: number
   top_video_id?: string | null
   top_video_title?: string | null
-  web_sessions: number
-  sessions_per_view?: number | null
+  week_start?: string
+  week_end?: string
+  clicks_scope?: "week" | "day"
+  unique_clicks?: number
+  web_sessions?: number
 }
 
 export type ViralRow = {
@@ -30,6 +34,8 @@ export type ViralRow = {
   views: number
   likes: number
   publish_day_sessions: number
+  unique_clicks?: number
+  clicks_scope?: "video" | "week"
 }
 
 export type VideoComment = {
@@ -41,7 +47,18 @@ export type VideoComment = {
 export type VideoEmbed =
   | { type: "iframe"; src: string }
   | { type: "instagram"; url: string }
-  | { type: "fallback" }
+  | { type: "link"; url?: string }
+  | { type: "fallback"; url?: string }
+
+export type VideoClicks = {
+  mode: "weekly_bio" | "per_video"
+  utm_content: string
+  week_start: string
+  week_end: string
+  unique_clicks: number
+  sessions: number
+  amount_rub: number | null
+}
 
 export type VideoDetailResponse = {
   video: {
@@ -56,6 +73,7 @@ export type VideoDetailResponse = {
   description: string
   embed: VideoEmbed
   comments: VideoComment[]
+  clicks?: VideoClicks
 }
 
 export type RefreshStatus = {
@@ -85,6 +103,14 @@ export type UtmMappingResponse = {
 export type AuthMeResponse = {
   email: string | null
   auth_enabled: boolean
+}
+
+export type MetrikaStatus = {
+  raw_sessions: number
+  utm_sessions: number
+  utm_sessions_period: number
+  last_extracted_at: string | null
+  error?: string
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -121,4 +147,5 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mappings }),
     }),
+  metrikaStatus: (days: number) => fetchJson<MetrikaStatus>(`/api/web/metrika-status?days=${days}`),
 }
