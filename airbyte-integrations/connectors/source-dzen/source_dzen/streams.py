@@ -56,23 +56,43 @@ def _extract_link(item: Mapping[str, Any]) -> str:
     return ""
 
 
+def _object_id_timestamp(publication_id: str) -> int:
+    text = str(publication_id or "").strip()
+    if text.startswith("gif:"):
+        text = text.split(":", 1)[1]
+    if len(text) < 8:
+        return 0
+    hex8 = text[:8]
+    if any(char not in "0123456789abcdefABCDEF" for char in hex8):
+        return 0
+    timestamp = int(hex8, 16)
+    if 1_000_000_000 <= timestamp <= 2_100_000_000:
+        return timestamp
+    return 0
+
+
 def _is_short_item(item: Mapping[str, Any]) -> bool:
     item_type = str(item.get("item_type") or item.get("type") or "").lower()
     if item_type in BLOCK_ITEM_TYPES or "block_short" in item_type:
         return False
+    link = _extract_link(item)
+    if "/a/" in link or "/news/" in link:
+        return False
     if item_type == "short_video" or item.get("type") == "short_video":
         return True
-    link = _extract_link(item)
     if "/shorts/" in link:
         return True
     for key in ("type", "contentType", "cardType", "publicationType"):
         value = str(item.get(key) or "").lower()
         if "short" in value:
             return True
-        if value in {"gif", "video", "short_video", "vertical_video"}:
+        if value in {"gif", "video", "short_video", "vertical_video", "generator_video"}:
             return True
-    # Channel feed cards (e.g. generator_video) often omit /shorts/ in API payloads.
+    # Channel feed cards often omit /shorts/ in API payloads.
     if link and "dzen.ru" in link and _extract_title(item):
+        return True
+    publication_id = _extract_publication_id(item, link)
+    if publication_id and _object_id_timestamp(publication_id):
         return True
     return False
 
@@ -204,6 +224,7 @@ def _normalize_short(item: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
         link = f"https://dzen.ru/shorts/{publication_id}"
     if not publication_id and link:
         publication_id = _extract_publication_id({}, link)
+    published_at = _extract_published_at(item) or _object_id_timestamp(publication_id)
     views, likes, comments = _extract_metrics(item)
     social = item.get("socialInfo") or {}
     if isinstance(social, dict) and not comments:
@@ -211,7 +232,7 @@ def _normalize_short(item: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
     return {
         "publication_id": publication_id,
         "title": title,
-        "published_at": _extract_published_at(item),
+        "published_at": published_at,
         "url": link,
         "views": views,
         "likes": likes,
@@ -394,13 +415,17 @@ class Shorts(DzenStream, IncrementalMixin):
 
     def _fetch_export_feed(self, cutoff: Optional[int]) -> Iterable[Mapping[str, Any]]:
         url = f"{self.url_base}api/v3/launcher/export"
-        response = requests.get(
-            url,
-            params={"channel_name": self.channel_name, "country_code": "ru"},
-            headers=self.request_headers({}),
-            cookies=self._session_cookies(),
-            timeout=30,
-        )
+        try:
+            response = requests.get(
+                url,
+                params={"channel_name": self.channel_name, "country_code": "ru"},
+                headers=self.request_headers({}),
+                cookies=self._session_cookies(),
+                timeout=30,
+            )
+        except Exception:
+            logger.exception("Dzen export feed request failed")
+            return
         if response.status_code != 200:
             logger.warning("Dzen export feed returned HTTP %s", response.status_code)
             return
@@ -420,33 +445,46 @@ class Shorts(DzenStream, IncrementalMixin):
         cutoff = self._start_timestamp(stream_state or {})
         seen_ids: set[str] = set()
 
-        for record in self._fetch_export_feed(cutoff):
-            seen_ids.add(record["publication_id"])
-            yield StreamData(record=record, associated_slice=stream_slice or {})
+        try:
+            for record in self._fetch_export_feed(cutoff):
+                seen_ids.add(record["publication_id"])
+                yield record
+        except Exception:
+            logger.exception("Dzen export feed failed")
 
-        for record in self._fetch_publisher_shorts(cutoff):
-            seen_ids.add(record["publication_id"])
-            yield StreamData(record=record, associated_slice=stream_slice or {})
-
-        page = 0
-        next_token: Optional[Mapping[str, Any]] = None
-        while page < self.max_pages:
-            url = self.request_url(stream_state or {}, next_page_token=next_token)
-            headers = dict(self.request_headers({}))
-            headers["X-Dzen-Page"] = str(page)
-            response = requests.get(
-                url,
-                headers=headers,
-                cookies=self._session_cookies(),
-                timeout=30,
-            )
-            response.raise_for_status()
-            for record in self.parse_response(response, stream_state):
+        try:
+            for record in self._fetch_publisher_shorts(cutoff):
                 if record["publication_id"] in seen_ids:
                     continue
                 seen_ids.add(record["publication_id"])
-                yield StreamData(record=record, associated_slice=stream_slice or {})
-            next_token = self.next_page_token(response)
-            if not next_token:
-                break
-            page += 1
+                yield record
+        except Exception:
+            logger.exception("Dzen publisher API failed")
+
+        try:
+            page = 0
+            next_token: Optional[Mapping[str, Any]] = None
+            while page < self.max_pages:
+                url = self.request_url(stream_state or {}, next_page_token=next_token)
+                headers = dict(self.request_headers({}))
+                headers["X-Dzen-Page"] = str(page)
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    cookies=self._session_cookies(),
+                    timeout=30,
+                )
+                response.raise_for_status()
+                for record in self.parse_response(response, stream_state):
+                    if record["publication_id"] in seen_ids:
+                        continue
+                    seen_ids.add(record["publication_id"])
+                    yield record
+                next_token = self.next_page_token(response)
+                if not next_token:
+                    break
+                page += 1
+        except Exception:
+            if not seen_ids:
+                raise
+            logger.exception("Dzen launcher feed failed after emitting %s records", len(seen_ids))

@@ -301,7 +301,7 @@ SELECT * FROM (
 
     SELECT
         'dzen' AS platform,
-        coalesce(publication_id, '') AS video_id,
+        replaceRegexpOne(coalesce(publication_id, ''), '^gif:', '') AS video_id,
         coalesce(title, '') AS title,
         if(
             coalesce(published_at, 0) > 0,

@@ -167,9 +167,21 @@ class ShortVideos(VkStream, IncrementalMixin):
         stream_slice: Mapping[str, Any] = None,
         stream_state: Mapping[str, Any] = None,
     ) -> Iterable[StreamData]:
-        yield from super().read_records(sync_mode, cursor_field, stream_slice, stream_state)
+        video_error: Optional[Exception] = None
+        try:
+            yield from super().read_records(sync_mode, cursor_field, stream_slice, stream_state)
+        except Exception as exc:
+            video_error = exc
+            logger.warning("VK video.get failed, falling back to wall.get: %s", exc)
         if self.config.get("include_wall_videos", True):
-            yield from self._read_wall_video_records(stream_state, stream_slice)
+            try:
+                yield from self._read_wall_video_records(stream_state, stream_slice)
+            except Exception as exc:
+                if video_error:
+                    raise RuntimeError(f"VK video.get failed ({video_error}); wall.get failed ({exc})") from exc
+                logger.warning("VK wall.get failed: %s", exc)
+        elif video_error:
+            raise video_error
 
     def _read_wall_video_records(
         self,

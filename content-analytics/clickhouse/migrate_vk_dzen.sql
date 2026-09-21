@@ -101,7 +101,7 @@ SELECT * FROM (
 
     SELECT
         'dzen' AS platform,
-        publication_id AS video_id,
+        replaceRegexpOne(publication_id, '^gif:', '') AS video_id,
         title,
         toDateTime(published_at) AS published_at,
         url,

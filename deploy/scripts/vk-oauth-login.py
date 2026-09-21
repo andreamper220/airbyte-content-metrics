@@ -299,13 +299,13 @@ def run_serve(args: argparse.Namespace) -> int:
     out(auth_url)
     out()
     out(f"Waiting on http://{CALLBACK_HOST}:{CALLBACK_PORT}/vk-oauth-callback ...")
-    done.wait(timeout=600)
+    done.wait(timeout=6 * 3600)
     server.shutdown()
     if "error" in result:
         print(result["error"])
         return 1
     if "ok" not in result:
-        print("Timeout: no callback within 10 minutes.")
+        print("Timeout: no callback within 6 hours.")
         return 1
     return 0
 
