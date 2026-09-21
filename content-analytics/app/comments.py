@@ -138,7 +138,7 @@ def save_platform_comments(platform: str, video_id: str, comments: list[dict[str
                 continue
             published = item.get("published_at")
             if not isinstance(published, datetime):
-                published = _parse_iso(published) or _utc_now()
+                published = _parse_published(published) or _utc_now()
             if published.tzinfo:
                 published = published.astimezone(timezone.utc).replace(tzinfo=None)
             rows.append(
@@ -543,7 +543,6 @@ def fetch_dzen_comments(video_id: str) -> list[dict[str, Any]]:
     channel = creds.dzen_channel_name() or settings.dzen_channel_name
     meta = dzen_comment_meta(video_id, channel or None) or {}
     document_id = str(meta.get("document_id") or _dzen_document_id(video_id))
-    token = str(meta.get("token") or "")
     publisher_id = str(meta.get("publisher_id") or "")
     session_id = creds.dzen_session_id()
     csrf = creds.dzen_csrf_token()
@@ -557,38 +556,34 @@ def fetch_dzen_comments(video_id: str) -> list[dict[str, Any]]:
         headers["x-csrf-token"] = csrf
         headers["X-Csrf-Token"] = csrf
     cookies = {"Session_id": session_id} if session_id else {}
-    found: list[dict[str, Any]] = []
-    attempts: list[tuple[str, dict[str, Any] | None]] = [
-        ("https://dzen.ru/api/comments", {"documentId": document_id, "commentsToken": token, "limit": "30"}),
-        ("https://dzen.ru/api/v3/comments", {"documentId": document_id, "commentsToken": token, "limit": "30"}),
-        ("https://dzen.ru/api/v3/launcher/comments", {"documentId": document_id, "comments_token": token}),
-        ("https://dzen.ru/api/comments/get-root-comments", {"entityId": document_id, "documentId": document_id}),
-    ]
+    params = {
+        "documentId": document_id,
+        "commentCount": "30",
+        "withUser": "true",
+        "enabledComments": "ENABLE",
+        "commentId": "0",
+        "withProfile": "true",
+    }
     if publisher_id:
-        attempts.append(
-            (f"https://dzen.ru/editor-api/v2/comments?publisherId={publisher_id}", {"documentId": document_id})
-        )
+        params["publisherId"] = publisher_id
+    found: list[dict[str, Any]] = []
     with httpx.Client(timeout=8, follow_redirects=True, headers=headers, cookies=cookies) as client:
-        for url, params in attempts:
+        for url in (
+            "https://dzen.ru/api/comments/top-comments",
+            "https://zen.yandex.ru/api/comments/top-comments",
+        ):
             try:
-                response = client.get(url, params={k: v for k, v in (params or {}).items() if v})
+                response = client.get(url, params=params)
             except httpx.HTTPError:
                 continue
             parsed = _comments_from_payload(_json_body(response), pid or video_id)
             if parsed:
                 found = parsed
                 break
-        if not found:
-            try:
-                response = client.post(
-                    "https://dzen.ru/api/comments",
-                    json={"documentId": document_id, "commentsToken": token, "limit": 30},
-                )
-                found = _comments_from_payload(_json_body(response), pid or video_id)
-            except httpx.HTTPError:
-                found = []
     if found:
         save_platform_comments("dzen", pid or video_id, found)
+        if document_id.startswith("gif:") and pid and pid != video_id:
+            save_platform_comments("dzen", document_id, found)
     return found
 
 
@@ -617,7 +612,8 @@ def _comments_from_payload(payload: Any, video_id: str) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         items = payload
     elif isinstance(payload, dict):
-        if payload.get("error") or payload.get("errtext") or payload.get("errors"):
+        has_comments = isinstance(payload.get("comments"), list)
+        if not has_comments and (payload.get("error") or payload.get("errtext") or payload.get("errors")):
             return []
         for key in ("comments", "items", "result", "data", "entries"):
             value = payload.get(key)
@@ -660,6 +656,8 @@ def _comments_from_payload(payload: Any, video_id: str) -> list[dict[str, Any]]:
             or item.get("published_at")
             or item.get("createTime")
             or item.get("createdAt")
+            or item.get("createdTs")
+            or item.get("created_ts")
             or item.get("date")
         )
         out.append(
@@ -668,7 +666,7 @@ def _comments_from_payload(payload: Any, video_id: str) -> list[dict[str, Any]]:
                 "author": author,
                 "text": text,
                 "likes": likes_n,
-                "published_at": published,
+                "published_at": _parse_published(published),
                 "reply_to": str(item.get("parentId") or item.get("parentCommentId") or ""),
             }
         )
@@ -820,6 +818,24 @@ def _dzen_error(payload: dict[str, Any], status_code: int) -> str:
     if status_code in {401, 403}:
         return "Сессия Дзена недействительна. Обновите DZEN_SESSION_ID и CSRF-токен"
     return f"Дзен вернул HTTP {status_code}"
+
+
+def _parse_published(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        if value.tzinfo:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+    if isinstance(value, (int, float)):
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp /= 1000
+        try:
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str) and value.strip().isdigit():
+        return _parse_published(int(value.strip()))
+    return _parse_iso(value)
 
 
 def _parse_iso(value: Any) -> datetime | None:

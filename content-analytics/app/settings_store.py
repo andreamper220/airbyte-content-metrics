@@ -18,7 +18,7 @@ DEFAULT_UTM_MAP = [
 PLATFORMS = ["youtube", "tiktok", "instagram", "vk", "dzen"]
 
 
-def get_utm_mapping() -> list[dict[str, str]]:
+def ensure_default_utm_mapping() -> list[dict[str, str]]:
     rows = query(
         """
         SELECT platform, utm_source
@@ -26,10 +26,29 @@ def get_utm_mapping() -> list[dict[str, str]]:
         ORDER BY platform, utm_source
         """
     )
+    existing = {(str(row["platform"]), str(row["utm_source"])) for row in rows}
+    missing = [row for row in DEFAULT_UTM_MAP if (row["platform"], row["utm_source"]) not in existing]
     if not rows:
-        save_utm_mapping(DEFAULT_UTM_MAP)
-        return DEFAULT_UTM_MAP.copy()
+        return save_utm_mapping(DEFAULT_UTM_MAP)
+    if missing:
+        client = get_client()
+        client.insert(
+            "platform_utm_mapping",
+            [(row["platform"], row["utm_source"]) for row in missing],
+            column_names=["platform", "utm_source"],
+        )
+        rows = query(
+            """
+            SELECT platform, utm_source
+            FROM analytics.platform_utm_mapping FINAL
+            ORDER BY platform, utm_source
+            """
+        )
     return rows
+
+
+def get_utm_mapping() -> list[dict[str, str]]:
+    return ensure_default_utm_mapping()
 
 
 def save_utm_mapping(rows: list[dict[str, Any]]) -> list[dict[str, str]]:

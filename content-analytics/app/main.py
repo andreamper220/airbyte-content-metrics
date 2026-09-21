@@ -35,7 +35,7 @@ from app.queries import (
 )
 from app.dzen_meta import resolve_dzen_video
 from app.dzen_stream import fetch_cdn, playlist_for_publication
-from app.settings_store import PLATFORMS, get_utm_mapping, save_utm_mapping
+from app.settings_store import PLATFORMS, ensure_default_utm_mapping, get_utm_mapping, save_utm_mapping
 from app.video_embed import build_embed
 from app.video_lookup import _video_id_candidates, load_video
 
@@ -105,6 +105,10 @@ async def lifespan(_app: FastAPI):
         ensure_comments_table()
     except Exception:
         logger.exception("Failed to ensure account_video_comments table")
+    try:
+        ensure_default_utm_mapping()
+    except Exception:
+        logger.exception("Failed to ensure default UTM mapping")
     refresh_task = asyncio.create_task(auto_refresh_loop())
     yield
     refresh_task.cancel()

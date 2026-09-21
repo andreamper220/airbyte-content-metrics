@@ -49,7 +49,8 @@ export function commentParts(raw: string | null | undefined): CommentPart[] {
   })
   const text = stripTags(marked)
   const parts: CommentPart[] = []
-  const tokenRe = /\u0001(\d+)\u0001|https?:\/\/[^\s<>"'()]+/g
+  const tokenRe =
+    /\u0001(\d+)\u0001|https?:\/\/[^\s<>"'()]+|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s<>"'()]*)?/g
   let lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = tokenRe.exec(text)) !== null) {
