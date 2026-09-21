@@ -85,7 +85,11 @@ SELECT * FROM (
         'dzen' AS platform,
         coalesce(publication_id, '') AS video_id,
         coalesce(title, '') AS title,
-        toDateTime(coalesce(published_at, 0)) AS published_at,
+        if(
+            coalesce(published_at, 0) > 0,
+            toDateTime(published_at),
+            toDateTime(_airbyte_extracted_at)
+        ) AS published_at,
         coalesce(url, '') AS url,
         toUInt64(coalesce(views, 0)) AS views,
         toUInt64(coalesce(likes, 0)) AS likes,

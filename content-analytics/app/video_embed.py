@@ -1,5 +1,7 @@
 from typing import Any
 
+from app.dzen_meta import normalize_publication_id, shorts_player_url
+
 
 def build_embed(platform: str, video_id: str, url: str) -> dict[str, Any]:
     platform = platform.lower()
@@ -30,6 +32,10 @@ def build_embed(platform: str, video_id: str, url: str) -> dict[str, Any]:
         return {"type": "link", "url": url}
 
     if platform == "dzen":
-        return {"type": "link", "url": url or f"https://dzen.ru/shorts/{video_id}"}
+        player_url = shorts_player_url(video_id, url)
+        if not player_url:
+            player_url = url or f"https://dzen.ru/shorts/{normalize_publication_id(video_id)}"
+        # dzen.ru sets X-Frame-Options / CSP frame-ancestors, so iframe is blocked in browsers.
+        return {"type": "link", "url": player_url}
 
     return {"type": "link", "url": url}

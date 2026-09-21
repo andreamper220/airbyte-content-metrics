@@ -3,6 +3,7 @@ import { LogOut, Settings2 } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
+import { CommentBell } from "@/components/layout/comment-bell"
 import { useAuth } from "@/lib/auth-context"
 import {
   Select,
@@ -22,6 +23,7 @@ type AppHeaderProps = {
   backHref?: string
   backLabel?: string
   actions?: ReactNode
+  onOpenVideo?: (platform: string, videoId: string) => void
 }
 
 export function AppHeader({
@@ -34,11 +36,12 @@ export function AppHeader({
   backHref,
   backLabel,
   actions,
+  onOpenVideo,
 }: AppHeaderProps) {
   const { authEnabled, email, logout } = useAuth()
 
   return (
-    <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <header className="relative z-20 mb-6 flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
@@ -74,6 +77,7 @@ export function AppHeader({
           </Button>
         ) : null}
         {actions}
+        <CommentBell onOpenVideo={onOpenVideo} />
         {authEnabled && email ? (
           <>
             <span className="hidden text-sm text-muted-foreground sm:inline">{email}</span>

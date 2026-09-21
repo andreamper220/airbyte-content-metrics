@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 
-import { api, type UtmMappingRow } from "@/lib/api"
+import { api, type CommentingStatus, type UtmMappingRow } from "@/lib/api"
 import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,12 +30,14 @@ export function SettingsPage() {
     text: "",
   })
   const [saving, setSaving] = useState(false)
+  const [commenting, setCommenting] = useState<Record<string, CommentingStatus>>({})
 
   useEffect(() => {
     void api.getUtmMap().then((data) => {
       setPlatforms(data.platforms)
       setRows(data.mappings)
     })
+    void api.commentingStatus().then((data) => setCommenting(data.platforms)).catch(() => undefined)
   }, [])
 
   function updateRow(index: number, field: keyof UtmMappingRow, value: string) {
@@ -70,12 +72,38 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
       <AppHeader
-        title="Маппинг UTM Source"
+        title="Настройки"
         backHref="/"
         backLabel="← Дашборд"
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Комментарии от аккаунта</CardTitle>
+          <CardDescription>
+            YouTube, VK и Дзен: ответы из карточки ролика публикуются от имени канала. Токены
+            задаются в <code className="rounded bg-muted px-1">.env</code>, после изменения нужен
+            перезапуск приложения.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2 text-sm">
+            {["youtube", "vk", "dzen"].map((platform) => {
+              const item = commenting[platform]
+              return (
+                <li key={platform} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                  <span className="font-medium uppercase tracking-wide">{platform}</span>
+                  <span className={item?.enabled ? "text-emerald-400" : "text-muted-foreground"}>
+                    {item?.enabled ? `включено · ${item.as || "аккаунт"}` : "токены не заданы"}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

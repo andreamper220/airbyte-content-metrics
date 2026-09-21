@@ -58,7 +58,7 @@ WITH video_utm AS (
         ) AS utm_content
     FROM analytics.mart_videos AS v FINAL
     LEFT JOIN analytics.raw_vk_videos AS vk FINAL ON v.platform = 'vk' AND vk.video_id = v.video_id
-    WHERE v.platform IN ('vk', 'dzen')
+    WHERE v.platform = 'vk'
 ),
 clicks_video AS (
     SELECT
@@ -67,7 +67,7 @@ clicks_video AS (
         toUInt32(uniqExact(r.clientID)) AS unique_clicks
     FROM analytics.raw_metrika_sessions AS r
     INNER JOIN analytics.v_platform_utm_map AS m ON lower(r.UTMSource) = m.utm_source
-    WHERE m.platform IN ('vk', 'dzen')
+    WHERE m.platform = 'vk'
       AND r.UTMContent LIKE 'video_%'
       AND lower(r.UTMMedium) IN ('clips', 'video')
       AND (coalesce(r.UTMCampaign, '') = '' OR lower(r.UTMCampaign) = 'organic')
@@ -80,7 +80,7 @@ clicks_week AS (
         toUInt32(uniqExact(r.clientID)) AS unique_clicks
     FROM analytics.raw_metrika_sessions AS r
     INNER JOIN analytics.v_platform_utm_map AS m ON lower(r.UTMSource) = m.utm_source
-    WHERE m.platform IN ('instagram', 'tiktok', 'youtube')
+    WHERE m.platform IN ('instagram', 'tiktok', 'youtube', 'dzen')
       AND r.UTMContent LIKE 'week_%'
       AND lower(r.UTMMedium) IN ('reels', 'shorts')
       AND (coalesce(r.UTMCampaign, '') = '' OR lower(r.UTMCampaign) = 'organic')
@@ -98,10 +98,10 @@ SELECT
     v.url AS url,
     v.publish_day_sessions AS publish_day_sessions,
     v.publish_day_users AS publish_day_users,
-    if(v.platform IN ('vk', 'dzen'), 'video', 'week') AS clicks_scope,
+    if(v.platform = 'vk', 'video', 'week') AS clicks_scope,
     coalesce(
         if(
-            v.platform IN ('vk', 'dzen'),
+            v.platform = 'vk',
             cv.unique_clicks,
             cw.unique_clicks
         ),
@@ -110,9 +110,9 @@ SELECT
 FROM analytics.v_viral_candidates AS v
 LEFT JOIN video_utm AS u ON v.platform = u.platform AND v.video_id = u.video_id
 LEFT JOIN clicks_video AS cv
-    ON v.platform IN ('vk', 'dzen') AND cv.platform = v.platform AND cv.utm_content = u.utm_content
+    ON v.platform = 'vk' AND cv.platform = v.platform AND cv.utm_content = u.utm_content
 LEFT JOIN clicks_week AS cw
-    ON v.platform IN ('instagram', 'tiktok', 'youtube')
+    ON v.platform IN ('instagram', 'tiktok', 'youtube', 'dzen')
    AND cw.platform = v.platform
    AND cw.week_start = toMonday(toDate(v.published_at))
 WHERE toDate(v.published_at) >= today() - {days:UInt32}
@@ -129,10 +129,10 @@ SELECT
     coalesce(p.top_video_views, 0) AS top_video_views,
     toMonday(d.date) AS week_start,
     addDays(toMonday(d.date), 6) AS week_end,
-    if(d.platform IN ('instagram', 'tiktok', 'youtube'), 'week', 'day') AS clicks_scope,
+    if(d.platform IN ('instagram', 'tiktok', 'youtube', 'dzen'), 'week', 'day') AS clicks_scope,
     coalesce(
         if(
-            d.platform IN ('instagram', 'tiktok', 'youtube'),
+            d.platform IN ('instagram', 'tiktok', 'youtube', 'dzen'),
             w.unique_clicks,
             day_c.unique_clicks
         ),
@@ -173,7 +173,7 @@ LEFT JOIN (
     WHERE coalesce(r.UTMSource, '') != ''
     GROUP BY m.platform, week_start
 ) AS w
-    ON d.platform IN ('instagram', 'tiktok', 'youtube')
+    ON d.platform IN ('instagram', 'tiktok', 'youtube', 'dzen')
    AND w.platform = d.platform
    AND w.week_start = toMonday(d.date)
 LEFT JOIN (
@@ -186,7 +186,7 @@ LEFT JOIN (
     WHERE coalesce(r.UTMSource, '') != ''
     GROUP BY m.platform, date
 ) AS day_c
-    ON d.platform IN ('vk', 'dzen')
+    ON d.platform = 'vk'
    AND day_c.platform = d.platform
    AND day_c.date = d.date
 ORDER BY toMonday(d.date) DESC, d.platform, d.date DESC
@@ -211,16 +211,113 @@ LIMIT 1
 
 VIDEO_COMMENTS = """
 SELECT
+    comment_id,
+    argMax(author, extracted_at) AS author,
+    argMax(text, extracted_at) AS text,
+    argMax(likes, extracted_at) AS likes,
+    argMax(published_at, extracted_at) AS published_at,
+    argMax(reply_to, extracted_at) AS reply_to,
+    max(from_account) AS from_account
+FROM (
+    SELECT
+        comment_id,
+        author,
+        text,
+        likes,
+        toDateTime(coalesce(published_at, toDateTime(0))) AS published_at,
+        CAST('' AS String) AS reply_to,
+        CAST(0 AS UInt8) AS from_account,
+        _airbyte_extracted_at AS extracted_at
+    FROM analytics.raw_video_comments
+    WHERE platform = {platform:String}
+      AND video_id IN ({video_ids:Array(String)})
+      AND coalesce(comment_id, '') != ''
+    UNION ALL
+    SELECT
+        comment_id,
+        author,
+        text,
+        likes,
+        toDateTime(coalesce(published_at, toDateTime(0))) AS published_at,
+        CAST('' AS String) AS reply_to,
+        CAST(0 AS UInt8) AS from_account,
+        _airbyte_extracted_at AS extracted_at
+    FROM analytics.platform_video_comments
+    WHERE platform = {platform:String}
+      AND video_id IN ({video_ids:Array(String)})
+      AND coalesce(comment_id, '') != ''
+    UNION ALL
+    SELECT
+        comment_id,
+        author,
+        text,
+        likes,
+        toDateTime(coalesce(published_at, toDateTime(0))) AS published_at,
+        reply_to,
+        CAST(1 AS UInt8) AS from_account,
+        _airbyte_extracted_at AS extracted_at
+    FROM analytics.account_video_comments
+    WHERE platform = {platform:String}
+      AND video_id IN ({video_ids:Array(String)})
+      AND coalesce(comment_id, '') != ''
+)
+GROUP BY comment_id
+ORDER BY from_account DESC, likes DESC, published_at DESC
+"""
+
+VIDEO_COMMENTS_FALLBACK = """
+SELECT
+    comment_id,
     argMax(author, _airbyte_extracted_at) AS author,
     argMax(text, _airbyte_extracted_at) AS text,
     argMax(likes, _airbyte_extracted_at) AS likes,
-    argMax(published_at, _airbyte_extracted_at) AS published_at
+    argMax(published_at, _airbyte_extracted_at) AS published_at,
+    CAST('' AS String) AS reply_to,
+    CAST(0 AS UInt8) AS from_account
 FROM analytics.raw_video_comments
 WHERE platform = {platform:String}
-  AND video_id = {video_id:String}
+  AND video_id IN ({video_ids:Array(String)})
   AND coalesce(comment_id, '') != ''
 GROUP BY comment_id
 ORDER BY likes DESC, published_at DESC
+"""
+
+RECENT_COMMENTS = """
+SELECT
+    c.platform AS platform,
+    c.video_id AS video_id,
+    c.comment_id AS comment_id,
+    c.author AS author,
+    c.text AS text,
+    c.likes AS likes,
+    c.published_at AS published_at,
+    v.title AS video_title
+FROM (
+    SELECT
+        platform,
+        video_id,
+        comment_id,
+        argMax(author, _airbyte_extracted_at) AS author,
+        argMax(text, _airbyte_extracted_at) AS text,
+        argMax(likes, _airbyte_extracted_at) AS likes,
+        argMax(published_at, _airbyte_extracted_at) AS published_at
+    FROM (
+        SELECT platform, video_id, comment_id, author, text, likes, published_at, _airbyte_extracted_at
+        FROM analytics.raw_video_comments
+        WHERE coalesce(comment_id, '') != ''
+        UNION ALL
+        SELECT platform, video_id, comment_id, author, text, likes, published_at, _airbyte_extracted_at
+        FROM analytics.platform_video_comments
+        WHERE coalesce(comment_id, '') != ''
+    )
+    GROUP BY platform, video_id, comment_id
+) AS c
+LEFT JOIN analytics.mart_videos AS v FINAL
+    ON v.platform = c.platform AND v.video_id = c.video_id
+WHERE c.published_at IS NOT NULL
+  AND toDate(c.published_at) >= today() - {days:UInt32}
+ORDER BY c.published_at DESC
+LIMIT {limit:UInt32}
 """
 
 PLATFORM_SUMMARY = """
@@ -309,9 +406,9 @@ utm_key AS (
     LEFT JOIN analytics.raw_vk_videos AS vk FINAL ON vk.video_id = v.video_id
 )
 SELECT
-    if(any(v.platform) IN ('vk', 'dzen'), 'per_video', 'weekly_bio') AS mode,
+    if(any(v.platform) = 'vk', 'per_video', 'weekly_bio') AS mode,
     if(
-        any(v.platform) IN ('vk', 'dzen'),
+        any(v.platform) = 'vk',
         any(u.video_utm),
         coalesce(anyIf(r.UTMContent, coalesce(r.UTMContent, '') != ''), '')
     ) AS utm_content,
@@ -325,11 +422,11 @@ LEFT JOIN analytics.v_platform_utm_map AS m ON m.platform = v.platform
 LEFT JOIN analytics.raw_metrika_sessions AS r ON lower(r.UTMSource) = m.utm_source
 WHERE coalesce(r.UTMSource, '') = ''
    OR (
-        v.platform IN ('instagram', 'tiktok', 'youtube')
+        v.platform IN ('instagram', 'tiktok', 'youtube', 'dzen')
         AND toMonday(toDate(assumeNotNull(r.date))) = toMonday(toDate(v.published_at))
    )
    OR (
-        v.platform IN ('vk', 'dzen')
+        v.platform = 'vk'
         AND (
             r.UTMContent = u.video_utm
             OR r.UTMContent = v.video_id

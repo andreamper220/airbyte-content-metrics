@@ -39,15 +39,41 @@ export type ViralRow = {
 }
 
 export type VideoComment = {
+  comment_id?: string
   author: string
   text: string
   likes: number
+  reply_to?: string
+  from_account?: boolean
+}
+
+export type CommentingStatus = {
+  enabled: boolean
+  as?: string | null
+  max_length: number
+  supported?: boolean
+}
+
+export type RecentComment = {
+  platform: string
+  video_id: string
+  comment_id: string
+  author: string
+  text: string
+  likes: number
+  published_at: string | null
+  video_title?: string | null
+}
+
+export type RecentCommentsResponse = {
+  comments: RecentComment[]
 }
 
 export type VideoEmbed =
-  | { type: "iframe"; src: string }
+  | { type: "iframe"; src: string; aspect?: "16/9" | "9/16" }
+  | { type: "hls"; src: string; poster?: string; url?: string }
   | { type: "instagram"; url: string }
-  | { type: "link"; url?: string }
+  | { type: "link"; url?: string; image?: string }
   | { type: "fallback"; url?: string }
 
 export type VideoClicks = {
@@ -73,6 +99,7 @@ export type VideoDetailResponse = {
   description: string
   embed: VideoEmbed
   comments: VideoComment[]
+  commenting?: CommentingStatus
   clicks?: VideoClicks
 }
 
@@ -122,9 +149,27 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error("Unauthorized")
   }
   if (!res.ok) {
-    throw new Error(await res.text())
+    const body = await res.text()
+    throw new Error(apiErrorMessage(body))
   }
   return res.json() as Promise<T>
+}
+
+function apiErrorMessage(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown }
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) return parsed.detail
+    if (Array.isArray(parsed.detail)) {
+      const parts = parsed.detail.map((item) => {
+        if (item && typeof item === "object" && "msg" in item) return String(item.msg)
+        return String(item)
+      })
+      if (parts.length) return parts.join("; ")
+    }
+  } catch {
+    /* not JSON */
+  }
+  return body || "Request failed"
 }
 
 export const api = {
@@ -138,6 +183,19 @@ export const api = {
     fetchJson<VideoDetailResponse>(
       `/api/video/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}`,
     ),
+  postComment: (platform: string, videoId: string, text: string, replyTo?: string) =>
+    fetchJson<{ comment: VideoComment }>(
+      `/api/video/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}/comments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, reply_to: replyTo || "" }),
+      },
+    ),
+  commentingStatus: () =>
+    fetchJson<{ platforms: Record<string, CommentingStatus> }>("/api/settings/commenting"),
+  recentComments: (days = 30, limit = 50) =>
+    fetchJson<RecentCommentsResponse>(`/api/comments/recent?days=${days}&limit=${limit}`),
   refresh: () => fetchJson<RefreshStatus>("/api/refresh", { method: "POST" }),
   refreshStatus: () => fetchJson<RefreshStatus>("/api/refresh/status"),
   getUtmMap: () => fetchJson<UtmMappingResponse>("/api/settings/utm-map"),

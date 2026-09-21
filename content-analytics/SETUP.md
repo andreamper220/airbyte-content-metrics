@@ -361,6 +361,24 @@ kind load docker-image airbyte/source-dzen:dev -n airbyte-abctl
 
 ---
 
+## Шаг 5c. Комментарии от имени аккаунта (YouTube / VK / Дзен)
+
+В карточке ролика можно написать комментарий или ответить — он уходит в API площадки от имени канала.
+
+Задайте переменные в `.env` и перезапустите `app`. Статус подключения виден в `/settings`.
+
+| Площадка | Переменные | Как получить |
+|----------|------------|--------------|
+| YouTube | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` | OAuth со scope `https://www.googleapis.com/auth/youtube.force-ssl` (токен Airbyte с readonly **не** подходит). `python3 deploy/scripts/youtube-oauth-login.py --paste` |
+| VK | `VK_ACCESS_TOKEN`, `VK_OWNER_ID` | Тот же пользовательский токен, что для `source-vk`. Для сообщества `from_group=1` (по умолчанию) |
+| Дзен | `DZEN_SESSION_ID`, `DZEN_CSRF_TOKEN` | Cookie `Session_id` и заголовок `x-csrf-token` из залогиненной сессии dzen.ru |
+
+YouTube: авторизуйтесь аккаунтом канала (или Brand Account).  
+VK: токену нужно право `video` (и возможность комментировать).  
+Дзен: сессия периодически истекает — обновите cookie.
+
+---
+
 ## Шаг 6. Яндекс.Метрика
 
 Source: `source-yandex-metrica`
@@ -508,6 +526,15 @@ docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/in
 
 **Dzen sync пустой или HTTP 403**  
 → Обновите `session_id` и `csrf_token` из браузера; проверьте slug канала в `channel_name`.
+
+**Не отправляется комментарий YouTube**  
+→ Нужен refresh token со scope `youtube.force-ssl`, не readonly-токен Airbyte. Аккаунт Google должен быть связан с каналом.
+
+**Не отправляется комментарий VK**  
+→ Пользовательский токен (не ключ сообщества) с правом `video`. Для группы `VK_OWNER_ID` отрицательный.
+
+**Не отправляется комментарий Дзена**  
+→ Просрочен `DZEN_SESSION_ID` / CSRF. Скопируйте заново из DevTools на dzen.ru.
 
 **Метрика долго синкается**  
 → Logs API асинхронный; первый запрос может ждать до 2 часов.

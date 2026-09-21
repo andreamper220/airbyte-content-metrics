@@ -208,7 +208,7 @@ class ShortVideos(VkStream, IncrementalMixin):
                     seen.add(record["video_id"])
                     if self._cursor_value is None or record["published_at"] > self._cursor_value:
                         self._cursor_value = record["published_at"]
-                    yield StreamData(record=record, associated_slice=stream_slice or {})
+                    yield record
             total = int(data.get("count") or 0)
             offset += len(posts)
             if offset >= total or not posts:

@@ -120,6 +120,36 @@ CREATE TABLE IF NOT EXISTS analytics.raw_video_comments
 ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
 ORDER BY (platform, video_id, comment_id);
 
+CREATE TABLE IF NOT EXISTS analytics.account_video_comments
+(
+    platform LowCardinality(String),
+    video_id String,
+    comment_id String,
+    author String,
+    text String,
+    likes UInt32,
+    published_at DateTime,
+    reply_to String,
+    posted_by String,
+    _airbyte_extracted_at DateTime64(3) DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
+ORDER BY (platform, video_id, comment_id);
+
+CREATE TABLE IF NOT EXISTS analytics.platform_video_comments
+(
+    platform LowCardinality(String),
+    video_id String,
+    comment_id String,
+    author String,
+    text String,
+    likes UInt32,
+    published_at DateTime,
+    _airbyte_extracted_at DateTime64(3) DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(_airbyte_extracted_at)
+ORDER BY (platform, video_id, comment_id);
+
 -- ---------------------------------------------------------------------------
 -- Mart: unified video catalog (snapshot, latest metrics per video)
 -- ---------------------------------------------------------------------------
@@ -273,7 +303,11 @@ SELECT * FROM (
         'dzen' AS platform,
         coalesce(publication_id, '') AS video_id,
         coalesce(title, '') AS title,
-        toDateTime(coalesce(published_at, 0)) AS published_at,
+        if(
+            coalesce(published_at, 0) > 0,
+            toDateTime(published_at),
+            toDateTime(_airbyte_extracted_at)
+        ) AS published_at,
         coalesce(url, '') AS url,
         toUInt64(coalesce(views, 0)) AS views,
         toUInt64(coalesce(likes, 0)) AS likes,

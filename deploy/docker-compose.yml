@@ -63,6 +63,7 @@ services:
       AIRBYTE_USERNAME: ${AIRBYTE_USERNAME:-}
       AIRBYTE_PASSWORD: ${AIRBYTE_PASSWORD:-}
       AIRBYTE_CONNECTION_IDS: ${AIRBYTE_CONNECTION_IDS:-}
+      DZEN_CHANNEL_NAME: ${DZEN_CHANNEL_NAME:-}
     depends_on:
       clickhouse:
         condition: service_healthy

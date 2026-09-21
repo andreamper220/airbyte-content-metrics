@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 
 import {
   api,
@@ -24,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-const WEEKLY_PLATFORMS = new Set(["youtube", "tiktok", "instagram"])
+const WEEKLY_PLATFORMS = new Set(["youtube", "tiktok", "instagram", "dzen"])
 
 function clickRowSpans(rows: CorrelationRow[]): number[] {
   const spans = Array.from({ length: rows.length }, () => 1)
@@ -58,6 +59,8 @@ export function DashboardPage() {
   const [videoOpen, setVideoOpen] = useState(false)
   const [videoData, setVideoData] = useState<VideoDetailResponse | null>(null)
   const [videoError, setVideoError] = useState<string | null>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const loadAll = useCallback(async () => {
     const daysNum = Number(days)
@@ -107,7 +110,7 @@ export function DashboardPage() {
       }`
     : "Загрузка…"
 
-  async function openVideo(platform: string, videoId: string) {
+  const openVideo = useCallback(async (platform: string, videoId: string) => {
     const id = videoId.trim()
     if (!id) return
     setVideoError(null)
@@ -119,7 +122,15 @@ export function DashboardPage() {
     } catch (err) {
       setVideoError(err instanceof Error ? err.message : "Не удалось загрузить ролик")
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const payload = (location.state as { openVideo?: { platform: string; videoId: string } } | null)
+      ?.openVideo
+    if (!payload?.platform || !payload.videoId) return
+    void openVideo(payload.platform, payload.videoId)
+    navigate(".", { replace: true, state: {} })
+  }, [location.state, navigate, openVideo])
 
   return (
     <div className="mx-auto max-w-7xl p-6">
@@ -130,6 +141,9 @@ export function DashboardPage() {
         onDaysChange={setDays}
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        onOpenVideo={(platform, videoId) => {
+          void openVideo(platform, videoId)
+        }}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -172,8 +186,9 @@ export function DashboardPage() {
         <CardHeader>
           <CardTitle>Площадка по дням</CardTitle>
           <p className="text-sm text-muted-foreground">
-            YouTube / TikTok / Instagram: колонка «Клики» общая на всю неделю (ссылка в bio), даже если роликов несколько.
-            VK / Дзен: клики за этот день. Цифра по ролику — откройте строку.
+            YouTube / TikTok / Instagram / Дзен: колонка «Клики» общая на всю неделю (ссылка в bio), даже если роликов несколько.
+            В Дзене ссылки в комментариях некликабельны, поэтому учитываем как у YouTube.
+            VK: клики за этот день. Цифра по ролику — откройте строку.
           </p>
         </CardHeader>
         <CardContent>
@@ -184,7 +199,7 @@ export function DashboardPage() {
                   <TableHead>Дата</TableHead>
                   <TableHead>Платформа</TableHead>
                   <TableHead>Просмотры</TableHead>
-                  <TableHead>Топ-видео дня</TableHead>
+                  <TableHead>Заголовок</TableHead>
                   <TableHead>Клики</TableHead>
                 </TableRow>
               </TableHeader>
@@ -204,7 +219,9 @@ export function DashboardPage() {
                       <Badge style={{ color: platformColor(row.platform) }}>{row.platform}</Badge>
                     </TableCell>
                     <TableCell>{fmt(row.total_views)}</TableCell>
-                    <TableCell>{row.top_video_title || "—"}</TableCell>
+                    <TableCell>
+                      {row.platform === "vk" ? "—" : row.top_video_title || "—"}
+                    </TableCell>
                     {clickSpans[index] > 0 ? (
                       <TableCell rowSpan={clickSpans[index]} className="align-middle">
                         <div className="font-medium">{fmt(row.unique_clicks)}</div>

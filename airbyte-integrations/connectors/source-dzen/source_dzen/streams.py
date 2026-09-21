@@ -20,7 +20,13 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+GENERIC_TITLES = frozenset({"ролики", "shorts", "видео", "ролик", "short"})
+BLOCK_ITEM_TYPES = frozenset({"channel_block_shorts", "channel_short_video_floor"})
 SHORTS_PATH = re.compile(r"/shorts/([^/?#]+)")
+
+
+def _is_generic_title(title: str) -> bool:
+    return not title or title.strip().lower() in GENERIC_TITLES
 
 
 def _first_int(*values: Any) -> int:
@@ -43,14 +49,19 @@ def _first_int(*values: Any) -> int:
 
 
 def _extract_link(item: Mapping[str, Any]) -> str:
-    for key in ("link", "url", "shareLink", "publicationUrl", "canonicalUrl"):
+    for key in ("share_link", "ext_link", "link", "url", "shareLink", "publicationUrl", "canonicalUrl"):
         value = item.get(key)
         if isinstance(value, str) and value.startswith("http"):
-            return value
+            return value.split("?", 1)[0] if key in {"share_link", "ext_link"} else value
     return ""
 
 
 def _is_short_item(item: Mapping[str, Any]) -> bool:
+    item_type = str(item.get("item_type") or item.get("type") or "").lower()
+    if item_type in BLOCK_ITEM_TYPES or "block_short" in item_type:
+        return False
+    if item_type == "short_video" or item.get("type") == "short_video":
+        return True
     link = _extract_link(item)
     if "/shorts/" in link:
         return True
@@ -67,10 +78,18 @@ def _is_short_item(item: Mapping[str, Any]) -> bool:
 
 
 def _extract_publication_id(item: Mapping[str, Any], link: str) -> str:
-    for key in ("publicationId", "publication_id", "id", "itemId", "contentId"):
+    for key in ("publication_object_id", "publicationObjectId", "publicationId", "publication_id", "id", "itemId", "contentId"):
         value = item.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip()
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        if text.startswith("gif:"):
+            return text.split(":", 1)[1]
+        if key == "id" and text.startswith("-") and text[1:].isdigit():
+            continue
+        return text
     match = SHORTS_PATH.search(link)
     if match:
         return match.group(1)
@@ -78,7 +97,33 @@ def _extract_publication_id(item: Mapping[str, Any], link: str) -> str:
 
 
 def _extract_published_at(item: Mapping[str, Any]) -> int:
-    for key in ("published_at", "publishTime", "publicationDate", "publishDate", "date", "createdAt"):
+    nested_keys = (
+        ("publication", "publishTime"),
+        ("publication", "publishedAt"),
+        ("publicationInfo", "publishTime"),
+        ("source", "publishTime"),
+        ("meta", "publishTime"),
+    )
+    for path in nested_keys:
+        node: Any = item
+        for key in path:
+            if not isinstance(node, dict):
+                node = None
+                break
+            node = node.get(key)
+        if node is not None:
+            try:
+                if isinstance(node, (int, float)):
+                    timestamp = int(node)
+                    if timestamp > 10_000_000_000:
+                        timestamp //= 1000
+                    if timestamp > 0:
+                        return timestamp
+                if isinstance(node, str) and node.strip():
+                    return int(pendulum.parse(node).timestamp())
+            except (ValueError, TypeError):
+                continue
+    for key in ("published_at", "publication_date", "publishTime", "publicationDate", "publishDate", "date", "createdAt", "addTime", "timestamp"):
         value = item.get(key)
         if value is None:
             continue
@@ -96,11 +141,21 @@ def _extract_published_at(item: Mapping[str, Any]) -> int:
 
 
 def _extract_title(item: Mapping[str, Any]) -> str:
+    candidates: list[str] = []
     for key in ("title", "name", "snippet", "text"):
         value = item.get(key)
         if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ""
+            candidates.append(value.strip())
+    for key in ("video", "content", "preview"):
+        nested = item.get(key)
+        if isinstance(nested, dict):
+            nested_title = _extract_title(nested)
+            if nested_title:
+                candidates.append(nested_title)
+    for title in candidates:
+        if not _is_generic_title(title):
+            return title
+    return candidates[0] if candidates else ""
 
 
 def _extract_metrics(item: Mapping[str, Any]) -> tuple[int, int, int]:
@@ -138,14 +193,24 @@ def _normalize_short(item: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
     publication_id = _extract_publication_id(item, link)
     if not publication_id and not link:
         return None
+    if publication_id.startswith("-") and publication_id[1:].isdigit():
+        return None
+    title = _extract_title(item)
+    if _is_generic_title(title):
+        return None
     if not link and publication_id:
+        link = f"https://dzen.ru/shorts/{publication_id}"
+    elif link and "/shorts/" not in link and publication_id:
         link = f"https://dzen.ru/shorts/{publication_id}"
     if not publication_id and link:
         publication_id = _extract_publication_id({}, link)
     views, likes, comments = _extract_metrics(item)
+    social = item.get("socialInfo") or {}
+    if isinstance(social, dict) and not comments:
+        comments = _first_int(social.get("commentCount"))
     return {
         "publication_id": publication_id,
-        "title": _extract_title(item),
+        "title": title,
         "published_at": _extract_published_at(item),
         "url": link,
         "views": views,
