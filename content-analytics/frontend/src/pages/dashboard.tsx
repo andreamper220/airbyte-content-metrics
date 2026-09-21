@@ -218,7 +218,9 @@ export function DashboardPage() {
                     <TableCell>
                       <Badge style={{ color: platformColor(row.platform) }}>{row.platform}</Badge>
                     </TableCell>
-                    <TableCell>{fmt(row.total_views)}</TableCell>
+                    <TableCell>
+                      {fmt(row.platform === "vk" ? row.total_views : (row.top_video_views ?? row.total_views))}
+                    </TableCell>
                     <TableCell>
                       {row.platform === "vk" ? "—" : row.top_video_title || "—"}
                     </TableCell>

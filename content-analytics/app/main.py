@@ -295,7 +295,7 @@ async def correlation(days: int = 30):
     out = []
     for row in rows:
         item = dict(row)
-        if item.get("platform") == "dzen" and (
+        if item.get("platform") == "dzen" and item.get("top_video_id") and (
             not item.get("top_video_title")
             or str(item.get("top_video_title", "")).strip().lower() in {"ролики", "shorts", "видео", "ролик"}
         ):
@@ -304,6 +304,7 @@ async def correlation(days: int = 30):
                 None,
                 str(item.get("top_video_title") or ""),
                 settings.dzen_channel_name,
+                fallback=False,
             )
             if resolved:
                 item["top_video_title"] = resolved.get("title") or item.get("top_video_title")

@@ -316,6 +316,9 @@ SELECT * FROM (
         0 AS reach,
         now() AS snapshot_at
     FROM analytics.raw_dzen_shorts
+    WHERE coalesce(publication_id, '') != ''
+      AND NOT match(coalesce(publication_id, ''), '^-\\d+$')
+      AND lowerUTF8(trim(BOTH ' ' FROM coalesce(title, ''))) NOT IN ('ролики', 'shorts', 'видео', 'ролик', 'short')
 );
 
 -- Platform → utm_source mapping (editable via /settings UI)

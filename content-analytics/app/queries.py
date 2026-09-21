@@ -42,6 +42,13 @@ SELECT
     argMax(title, views) AS top_video_title,
     max(views) AS top_video_views
 FROM analytics.mart_videos FINAL
+WHERE NOT (
+    platform = 'dzen'
+    AND (
+        match(video_id, '^-\\d+$')
+        OR lowerUTF8(trim(BOTH ' ' FROM title)) IN ('ролики', 'shorts', 'видео', 'ролик', 'short')
+    )
+)
 GROUP BY date, platform
 """
 
@@ -150,6 +157,7 @@ FROM (
     INNER JOIN analytics.v_platform_utm_map AS m ON lower(r.UTMSource) = m.utm_source
     WHERE coalesce(r.UTMSource, '') != ''
       AND toDate(assumeNotNull(r.date)) >= today() - {days:UInt32}
+      AND m.platform = 'vk'
 ) AS d
 LEFT JOIN (
     SELECT

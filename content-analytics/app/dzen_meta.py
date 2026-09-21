@@ -194,6 +194,8 @@ def resolve_dzen_video(
     url: str | None,
     title: str | None,
     channel_name: str | None,
+    *,
+    fallback: bool = True,
 ) -> Optional[dict[str, Any]]:
     url_id = dzen_short_id_from_url(url)
     pid = normalize_publication_id(video_id)
@@ -227,4 +229,6 @@ def resolve_dzen_video(
         if parsed["video_id"] == pid or (url_id and parsed["video_id"] == url_id):
             id_match = parsed
 
-    return block_match or id_match or first_short
+    if fallback:
+        return block_match or id_match or first_short
+    return block_match or id_match

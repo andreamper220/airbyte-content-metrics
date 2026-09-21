@@ -34,6 +34,7 @@ def refresh_marts() -> None:
     client = get_client()
     client.command("TRUNCATE TABLE analytics.mart_web_traffic_daily")
     client.command("TRUNCATE TABLE analytics.mart_platform_daily")
+    client.command("TRUNCATE TABLE analytics.mart_videos")
     for sql in (REFRESH_MART_VIDEOS, REFRESH_WEB_TRAFFIC, REFRESH_PLATFORM_DAILY):
         client.command(sql)
 

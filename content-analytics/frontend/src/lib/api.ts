@@ -20,6 +20,7 @@ export type CorrelationRow = {
   total_views: number
   top_video_id?: string | null
   top_video_title?: string | null
+  top_video_views?: number
   week_start?: string
   week_end?: string
   clicks_scope?: "week" | "day"
