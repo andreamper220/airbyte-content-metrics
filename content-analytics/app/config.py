@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     vk_config_path: str = ""
     dzen_session_id: str = ""
     dzen_csrf_token: str = ""
+    dzen_sess_id: str = ""
+    zen_session_id: str = ""
+    dzen_cookie: str = ""
+    dzen_cookie_path: str = "/secrets/dzen-comment.json"
+    dzen_fp_token: str = ""
+    youtube_token_path: str = "/secrets/youtube-comment-token.json"
 
 
 settings = Settings()

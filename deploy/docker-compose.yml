@@ -64,6 +64,24 @@ services:
       AIRBYTE_PASSWORD: ${AIRBYTE_PASSWORD:-}
       AIRBYTE_CONNECTION_IDS: ${AIRBYTE_CONNECTION_IDS:-}
       DZEN_CHANNEL_NAME: ${DZEN_CHANNEL_NAME:-}
+      DZEN_SESSION_ID: ${DZEN_SESSION_ID:-}
+      DZEN_CSRF_TOKEN: ${DZEN_CSRF_TOKEN:-}
+      DZEN_SESS_ID: ${DZEN_SESS_ID:-}
+      ZEN_SESSION_ID: ${ZEN_SESSION_ID:-}
+      DZEN_COOKIE_PATH: ${DZEN_COOKIE_PATH:-/secrets/dzen-comment.json}
+      DZEN_FP_TOKEN: ${DZEN_FP_TOKEN:-}
+      YOUTUBE_TOKEN_PATH: ${YOUTUBE_TOKEN_PATH:-/secrets/youtube-comment-token.json}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      YOUTUBE_REFRESH_TOKEN: ${YOUTUBE_REFRESH_TOKEN:-}
+      YOUTUBE_CHANNEL_ID: ${YOUTUBE_CHANNEL_ID:-}
+      VK_ACCESS_TOKEN: ${VK_ACCESS_TOKEN:-}
+      VK_OWNER_ID: ${VK_OWNER_ID:-}
+      VK_COMMENT_FROM_GROUP: ${VK_COMMENT_FROM_GROUP:-true}
+      VK_CONFIG_PATH: ${VK_CONFIG_PATH:-/secrets/source-vk-config.json}
+      COMMENT_CREDENTIALS_PATH: ${COMMENT_CREDENTIALS_PATH:-}
+    volumes:
+      - ./secrets:/secrets
     depends_on:
       clickhouse:
         condition: service_healthy

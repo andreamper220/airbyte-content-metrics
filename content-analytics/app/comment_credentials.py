@@ -33,7 +33,20 @@ def _section(name: str) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+def _youtube_token_file() -> dict[str, Any]:
+    path = settings.youtube_token_path or "/secrets/youtube-comment-token.json"
+    return _read_json(path)
+
+
 def youtube_client_id() -> str:
+    stored = _youtube_token_file()
+    if stored.get("refresh_token"):
+        return (
+            str(stored.get("client_id") or "")
+            or settings.google_client_id
+            or settings.youtube_client_id
+            or str(_section("youtube").get("client_id") or "")
+        ).strip()
     return (
         settings.youtube_client_id
         or str(_section("youtube").get("client_id") or "")
@@ -42,6 +55,13 @@ def youtube_client_id() -> str:
 
 
 def youtube_client_secret() -> str:
+    stored = _youtube_token_file()
+    if stored.get("refresh_token"):
+        return (
+            settings.google_client_secret
+            or settings.youtube_client_secret
+            or str(_section("youtube").get("client_secret") or "")
+        ).strip()
     return (
         settings.youtube_client_secret
         or str(_section("youtube").get("client_secret") or "")
@@ -50,7 +70,10 @@ def youtube_client_secret() -> str:
 
 
 def youtube_refresh_token() -> str:
-    return (settings.youtube_refresh_token or str(_section("youtube").get("refresh_token") or "")).strip()
+    token = (settings.youtube_refresh_token or str(_section("youtube").get("refresh_token") or "")).strip()
+    if token:
+        return token
+    return str(_youtube_token_file().get("refresh_token") or "").strip()
 
 
 def youtube_channel_id() -> str:
@@ -77,12 +100,76 @@ def vk_credentials() -> tuple[str, int]:
     return token.strip(), owner_id
 
 
+def _parse_cookie_header(raw: str) -> dict[str, str]:
+    cookies: dict[str, str] = {}
+    for part in (raw or "").split(";"):
+        item = part.strip()
+        if not item or "=" not in item:
+            continue
+        name, value = item.split("=", 1)
+        name = name.strip()
+        if name:
+            cookies[name] = value.strip()
+    return cookies
+
+
+def _dzen_file() -> dict[str, Any]:
+    return _read_json(settings.dzen_cookie_path)
+
+
 def dzen_session_id() -> str:
-    return (settings.dzen_session_id or str(_section("dzen").get("session_id") or "")).strip()
+    return (
+        settings.dzen_session_id
+        or str(_section("dzen").get("session_id") or "")
+        or str(_dzen_file().get("session_id") or "")
+    ).strip()
 
 
 def dzen_csrf_token() -> str:
-    return (settings.dzen_csrf_token or str(_section("dzen").get("csrf_token") or "")).strip()
+    return (
+        settings.dzen_csrf_token
+        or str(_section("dzen").get("csrf_token") or "")
+        or str(_dzen_file().get("csrf_token") or "")
+    ).strip()
+
+
+def dzen_fp_token() -> str:
+    return (
+        settings.dzen_fp_token
+        or str(_section("dzen").get("fp_token") or "")
+        or str(_dzen_file().get("fp_token") or "")
+    ).strip()
+
+
+def dzen_cookies() -> dict[str, str]:
+    cookies: dict[str, str] = {}
+    stored = _dzen_file()
+    raw_map = stored.get("cookies")
+    if isinstance(raw_map, dict):
+        for key, value in raw_map.items():
+            if key and value is not None and str(value):
+                cookies[str(key)] = str(value)
+    for raw in (
+        stored.get("cookie"),
+        settings.dzen_cookie,
+        str(_section("dzen").get("cookie") or ""),
+    ):
+        if raw:
+            cookies.update(_parse_cookie_header(str(raw)))
+    session_id = dzen_session_id()
+    if session_id:
+        cookies["Session_id"] = session_id
+    dzen_sess = (settings.dzen_sess_id or str(_section("dzen").get("dzen_sess_id") or "")).strip()
+    zen_sess = (settings.zen_session_id or str(_section("dzen").get("zen_session_id") or "")).strip()
+    if dzen_sess:
+        cookies["dzen_sess_id"] = dzen_sess
+    if zen_sess:
+        cookies["zen_session_id"] = zen_sess
+    if "Session_id" not in cookies:
+        fallback = cookies.get("dzen_sess_id") or ""
+        if fallback.startswith("y0"):
+            cookies["Session_id"] = fallback
+    return {key: value for key, value in cookies.items() if value}
 
 
 def dzen_channel_name() -> str:
@@ -99,7 +186,7 @@ def platform_configured(platform: str) -> bool:
         token, owner_id = vk_credentials()
         return bool(token and owner_id)
     if platform == "dzen":
-        return bool(dzen_session_id())
+        return bool(dzen_cookies())
     return False
 
 

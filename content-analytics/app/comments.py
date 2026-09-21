@@ -211,7 +211,11 @@ def account_label(platform: str) -> str:
         _, title = _vk_account_identity()
         return title
     if platform == "dzen":
-        return creds.dzen_channel_name() or "канал Дзена"
+        name = creds.dzen_channel_name()
+        login = creds.dzen_cookies().get("yandex_login") or ""
+        if name and login:
+            return f"{name} ({login})"
+        return name or login or "канал Дзена"
     return platform
 
 
@@ -508,28 +512,41 @@ def _extract_csrf(client: httpx.Client, html: str) -> str:
     return match.group(1) if match else ""
 
 
+def _dzen_headers(referer: str) -> dict[str, str]:
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://dzen.ru",
+        "Referer": referer,
+    }
+    csrf = creds.dzen_csrf_token()
+    if csrf:
+        headers["x-csrf-token"] = csrf
+        headers["X-Csrf-Token"] = csrf
+    fp_token = creds.dzen_fp_token()
+    if fp_token:
+        headers["X-FP-Token"] = fp_token
+        headers["x-fp-token"] = fp_token
+    return headers
+
+
 def _dzen_client(video_id: str) -> tuple[httpx.Client, str, str]:
-    session_id = creds.dzen_session_id()
     csrf = creds.dzen_csrf_token()
     pid = normalize_publication_id(video_id)
     referer = f"https://dzen.ru/shorts/{pid}" if pid else "https://dzen.ru/"
     client = httpx.Client(
         timeout=30,
         follow_redirects=True,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/json, text/plain, */*",
-            "Origin": "https://dzen.ru",
-            "Referer": referer,
-        },
-        cookies={"Session_id": session_id},
+        headers=_dzen_headers(referer),
+        cookies=creds.dzen_cookies(),
     )
-    if not csrf:
-        try:
-            page = client.get(referer)
-            csrf = _extract_csrf(client, page.text)
-        except httpx.HTTPError:
-            logger.exception("Failed to fetch Dzen CSRF token")
+    try:
+        page = client.get(referer)
+        extracted = _extract_csrf(client, page.text)
+        if extracted:
+            csrf = extracted
+    except httpx.HTTPError:
+        logger.exception("Failed to fetch Dzen CSRF token")
     if csrf:
         client.headers["x-csrf-token"] = csrf
         client.headers["X-Csrf-Token"] = csrf
@@ -544,18 +561,8 @@ def fetch_dzen_comments(video_id: str) -> list[dict[str, Any]]:
     meta = dzen_comment_meta(video_id, channel or None) or {}
     document_id = str(meta.get("document_id") or _dzen_document_id(video_id))
     publisher_id = str(meta.get("publisher_id") or "")
-    session_id = creds.dzen_session_id()
-    csrf = creds.dzen_csrf_token()
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json, text/plain, */*",
-        "Origin": "https://dzen.ru",
-        "Referer": f"https://dzen.ru/shorts/{pid}" if pid else "https://dzen.ru/",
-    }
-    if csrf:
-        headers["x-csrf-token"] = csrf
-        headers["X-Csrf-Token"] = csrf
-    cookies = {"Session_id": session_id} if session_id else {}
+    headers = _dzen_headers(f"https://dzen.ru/shorts/{pid}" if pid else "https://dzen.ru/")
+    cookies = creds.dzen_cookies()
     params = {
         "documentId": document_id,
         "commentCount": "30",
@@ -732,6 +739,7 @@ def _post_dzen(video_id: str, text: str, reply_to: str) -> PostedComment:
     payloads: list[dict[str, Any]] = [
         {"documentId": document_id, "text": text},
         {"documentId": document_id, "message": text},
+        {"documentId": document_id, "comment": {"text": text, "parentCommentId": reply_to or "0"}},
         {"documentId": document_id, "comment": {"text": text}},
         {"publicationId": document_id, "text": text},
         {"objectId": document_id, "text": text},
@@ -742,7 +750,10 @@ def _post_dzen(video_id: str, text: str, reply_to: str) -> PostedComment:
             item["parentCommentId"] = reply_to
             item["parentId"] = reply_to
     endpoints = (
+        "https://dzen.ru/api/comments/add-comment",
+        "https://dzen.ru/api/comments/add",
         "https://dzen.ru/api/comments",
+        "https://dzen.ru/api/v3/comments/add-comment",
         "https://dzen.ru/api/v3/comments",
         "https://dzen.ru/api/v3/launcher/comments",
         "https://dzen.ru/api/comments/create",
