@@ -15,6 +15,8 @@ from airbyte_cdk.sources.streams.http import HttpStream
 logger = logging.getLogger("airbyte")
 SCHEMAS_PATH = Path(__file__).parent / "schemas"
 
+# Insights like reach / watch time need extra scopes the account-holder
+# token usually does not have; requesting them fails the whole page (40130).
 VIDEO_FIELDS = [
     "item_id",
     "create_time",
@@ -27,10 +29,14 @@ VIDEO_FIELDS = [
     "likes",
     "comments",
     "shares",
-    "reach",
-    "average_time_watched",
-    "total_time_watched",
-    "full_video_watched_rate",
+]
+PROFILE_FIELDS = [
+    "username",
+    "display_name",
+    "profile_image",
+    "following_count",
+    "videos_count",
+    "is_verified",
 ]
 
 
@@ -78,19 +84,7 @@ class AccountProfile(TiktokBusinessStream):
     ) -> MutableMapping[str, Any]:
         return {
             "business_id": self.business_id,
-            "fields": json.dumps(
-                [
-                    "business_id",
-                    "display_name",
-                    "username",
-                    "profile_image",
-                    "followers_count",
-                    "following_count",
-                    "likes_count",
-                    "video_count",
-                    "is_verified",
-                ]
-            ),
+            "fields": json.dumps(PROFILE_FIELDS),
         }
 
     def parse_response(
@@ -101,9 +95,13 @@ class AccountProfile(TiktokBusinessStream):
         next_page_token: Mapping[str, Any] = None,
     ) -> Iterable[Mapping[str, Any]]:
         self._check_response(response)
-        data = response.json().get("data", {})
-        if data:
-            yield data
+        data = response.json().get("data", {}) or {}
+        if not data:
+            return
+        data["business_id"] = data.get("business_id") or self.business_id
+        if "video_count" not in data and "videos_count" in data:
+            data["video_count"] = data.get("videos_count")
+        yield data
 
     def get_response(self) -> requests.Response:
         url = f"{self.url_base}{self.path()}"
@@ -181,10 +179,23 @@ class Videos(TiktokBusinessStream, IncrementalMixin):
         cutoff = self._state_timestamp(stream_state or {})
 
         for video in videos:
-            create_time = int(video.get("create_time", 0))
+            create_time = int(video.get("create_time", 0) or 0)
             if cutoff and create_time < cutoff:
                 continue
             video["create_time"] = create_time
+            for numeric in (
+                "video_views",
+                "likes",
+                "comments",
+                "shares",
+                "reach",
+                "average_time_watched",
+                "total_time_watched",
+                "full_video_watched_rate",
+                "video_duration",
+            ):
+                if video.get(numeric) is None:
+                    video[numeric] = 0
             if self._cursor_value is None or create_time > self._cursor_value:
                 self._cursor_value = create_time
             yield video

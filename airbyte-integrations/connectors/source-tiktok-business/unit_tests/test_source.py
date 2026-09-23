@@ -64,3 +64,11 @@ def test_videos_stream_pagination(source):
 def test_spec():
     spec = SourceTiktokBusiness().spec(logger=None)
     assert "access_token" in spec.connectionSpecification["properties"]
+    assert "refresh_token" in spec.connectionSpecification["properties"]
+
+
+def test_video_fields_skip_restricted_insights():
+    from source_tiktok_business.streams import VIDEO_FIELDS
+
+    assert "reach" not in VIDEO_FIELDS
+    assert "average_time_watched" not in VIDEO_FIELDS

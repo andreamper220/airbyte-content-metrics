@@ -36,3 +36,20 @@ connectionSpecification:
       minimum: 1
       maximum: 20
       order: 3
+    app_id:
+      type: string
+      title: App ID
+      description: TikTok app ID (client_key). Used with refresh_token to renew access.
+      order: 4
+    app_secret:
+      type: string
+      title: App Secret
+      description: TikTok app secret. Used with refresh_token to renew access.
+      airbyte_secret: true
+      order: 5
+    refresh_token:
+      type: string
+      title: Refresh Token
+      description: OAuth refresh token (valid ~1 year). Access token is renewed on each sync.
+      airbyte_secret: true
+      order: 6
