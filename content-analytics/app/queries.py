@@ -197,7 +197,7 @@ LEFT JOIN (
     ON d.platform = 'vk'
    AND day_c.platform = d.platform
    AND day_c.date = d.date
-ORDER BY toMonday(d.date) DESC, d.platform, d.date DESC
+ORDER BY d.date DESC, d.platform
 """
 
 VIDEO_DETAIL = """

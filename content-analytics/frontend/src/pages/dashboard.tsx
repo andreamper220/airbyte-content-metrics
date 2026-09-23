@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { useLocation, useNavigate } from "react-router-dom"
 
 import {
@@ -14,7 +15,16 @@ import { AppHeader } from "@/components/layout/app-header"
 import { TrendChart } from "@/components/dashboard/trend-chart"
 import { VideoDialog } from "@/components/dashboard/video-dialog"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Table,
@@ -26,6 +36,76 @@ import {
 } from "@/components/ui/table"
 
 const WEEKLY_PLATFORMS = new Set(["youtube", "tiktok", "instagram", "dzen"])
+
+type SortKey = "date" | "platform" | "views" | "title" | "clicks"
+type SortDir = "asc" | "desc"
+
+type ColumnFilters = {
+  date: string
+  platform: string
+  views: string
+  title: string
+  clicks: string
+}
+
+const EMPTY_FILTERS: ColumnFilters = {
+  date: "",
+  platform: "",
+  views: "",
+  title: "",
+  clicks: "",
+}
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "date", label: "Дата" },
+  { key: "platform", label: "Платформа" },
+  { key: "views", label: "Просмотры" },
+  { key: "title", label: "Заголовок" },
+  { key: "clicks", label: "Клики" },
+]
+
+function rowViews(row: CorrelationRow): number {
+  return row.platform === "vk" ? row.total_views : (row.top_video_views ?? row.total_views)
+}
+
+function rowTitle(row: CorrelationRow): string {
+  return row.platform === "vk" ? "" : row.top_video_title || ""
+}
+
+function rowClicks(row: CorrelationRow): number {
+  return row.unique_clicks ?? 0
+}
+
+function matchesNumber(value: number, query: string): boolean {
+  const needle = query.trim().toLowerCase().replace(/\s/g, "")
+  if (!needle) return true
+  return String(value).includes(needle) || fmt(value).toLowerCase().includes(needle)
+}
+
+function compareRows(a: CorrelationRow, b: CorrelationRow, key: SortKey): number {
+  switch (key) {
+    case "date":
+      return a.date.localeCompare(b.date)
+    case "platform":
+      return a.platform.localeCompare(b.platform)
+    case "views":
+      return rowViews(a) - rowViews(b)
+    case "title":
+      return rowTitle(a).localeCompare(rowTitle(b), "ru")
+    case "clicks":
+      return rowClicks(a) - rowClicks(b)
+  }
+}
+
+function rowMatchesFilters(row: CorrelationRow, filters: ColumnFilters): boolean {
+  if (filters.date && !row.date.includes(filters.date.trim())) return false
+  if (filters.platform && row.platform !== filters.platform) return false
+  if (!matchesNumber(rowViews(row), filters.views)) return false
+  if (filters.title && !rowTitle(row).toLowerCase().includes(filters.title.trim().toLowerCase())) {
+    return false
+  }
+  return matchesNumber(rowClicks(row), filters.clicks)
+}
 
 function clickRowSpans(rows: CorrelationRow[]): number[] {
   const spans = Array.from({ length: rows.length }, () => 1)
@@ -59,6 +139,9 @@ export function DashboardPage() {
   const [videoOpen, setVideoOpen] = useState(false)
   const [videoData, setVideoData] = useState<VideoDetailResponse | null>(null)
   const [videoError, setVideoError] = useState<string | null>(null)
+  const [sortKey, setSortKey] = useState<SortKey>("date")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [filters, setFilters] = useState<ColumnFilters>(EMPTY_FILTERS)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -78,7 +161,39 @@ export function DashboardPage() {
     setMetrikaStatus(metrikaData)
   }, [days])
 
-  const clickSpans = useMemo(() => clickRowSpans(correlation), [correlation])
+  const platforms = useMemo(
+    () => Array.from(new Set(correlation.map((row) => row.platform))).sort(),
+    [correlation],
+  )
+
+  const visibleRows = useMemo(() => {
+    const rows = correlation.filter((row) => rowMatchesFilters(row, filters))
+    const dir = sortDir === "asc" ? 1 : -1
+    rows.sort((a, b) => {
+      const primary = compareRows(a, b, sortKey)
+      if (primary !== 0) return primary * dir
+      const byDate = b.date.localeCompare(a.date)
+      if (byDate !== 0) return byDate
+      return a.platform.localeCompare(b.platform)
+    })
+    return rows
+  }, [correlation, filters, sortDir, sortKey])
+
+  const clickSpans = useMemo(() => clickRowSpans(visibleRows), [visibleRows])
+  const filtersActive = Object.values(filters).some((value) => value.trim() !== "")
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"))
+      return
+    }
+    setSortKey(key)
+    setSortDir(key === "platform" || key === "title" ? "asc" : "desc")
+  }
+
+  function setFilter<K extends keyof ColumnFilters>(key: K, value: ColumnFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }))
+  }
 
   useEffect(() => {
     void loadAll()
@@ -184,27 +299,106 @@ export function DashboardPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Площадка по дням</CardTitle>
+          <div className="flex items-start justify-between gap-3">
+            <CardTitle>Площадка по дням</CardTitle>
+            {filtersActive ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setFilters(EMPTY_FILTERS)}
+              >
+                Сбросить фильтры
+              </Button>
+            ) : null}
+          </div>
           <p className="text-sm text-muted-foreground">
             YouTube / TikTok / Instagram / Дзен: колонка «Клики» общая на всю неделю (ссылка в bio), даже если роликов несколько.
             В Дзене ссылки в комментариях некликабельны, поэтому учитываем как у YouTube.
             VK: клики за этот день. Цифра по ролику — откройте строку.
+            Сортировка по умолчанию — дата по убыванию. Показано {visibleRows.length} из {correlation.length}.
           </p>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[480px] rounded-md border">
-            <Table>
+            <Table containerClassName="overflow-visible">
               <TableHeader>
-                <TableRow>
-                  <TableHead>Дата</TableHead>
-                  <TableHead>Платформа</TableHead>
-                  <TableHead>Просмотры</TableHead>
-                  <TableHead>Заголовок</TableHead>
-                  <TableHead>Клики</TableHead>
+                <TableRow className="hover:bg-transparent">
+                  {SORT_COLUMNS.map((column) => (
+                    <TableHead
+                      key={column.key}
+                      aria-sort={
+                        sortKey === column.key
+                          ? sortDir === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
+                      className="sticky top-0 z-20 h-auto bg-card px-2 py-2 align-top"
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-left hover:text-foreground"
+                        onClick={() => toggleSort(column.key)}
+                      >
+                        {column.label}
+                        {sortKey === column.key ? (
+                          sortDir === "asc" ? (
+                            <ArrowUp className="size-3.5" />
+                          ) : (
+                            <ArrowDown className="size-3.5" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="size-3.5 opacity-40" />
+                        )}
+                      </button>
+                      {column.key === "platform" ? (
+                        <Select
+                          value={filters.platform || "all"}
+                          onValueChange={(value) => setFilter("platform", value === "all" ? "" : value)}
+                        >
+                          <SelectTrigger className="mt-1.5 h-8 px-2 text-xs">
+                            <SelectValue placeholder="Все" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Все</SelectItem>
+                            {platforms.map((platform) => (
+                              <SelectItem key={platform} value={platform}>
+                                {platform}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={filters[column.key]}
+                          onChange={(event) => setFilter(column.key, event.target.value)}
+                          placeholder={
+                            column.key === "date"
+                              ? "2026-09"
+                              : column.key === "title"
+                                ? "текст"
+                                : "число"
+                          }
+                          className="mt-1.5 h-8 px-2 text-xs"
+                          aria-label={`Фильтр: ${column.label}`}
+                        />
+                      )}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {correlation.map((row, index) => (
+                {visibleRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      {correlation.length === 0
+                        ? "Нет данных за выбранный период"
+                        : "Нет строк по текущим фильтрам"}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {visibleRows.map((row, index) => (
                   <TableRow
                     key={`${row.date}-${row.platform}-${row.top_video_id ?? "none"}`}
                     className={row.top_video_id ? "cursor-pointer" : undefined}
